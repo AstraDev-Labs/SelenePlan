@@ -1,0 +1,36 @@
+# Allowed sources configuration for ingestion-service
+# Ingestion requests must reference a valid source ID. Arbitrary URLs are strictly rejected.
+
+sources:
+  - id: lola-dem
+    name: "LOLA Polar DEM (NASA PDS)"
+    host: "pds-geosciences.wustl.edu"
+    path_prefix: "/lro/lro-l-lola-3-rdr-v1/lola_gdr/"
+    license: "NASA Open Data Policy (Public Domain)"
+    terms_note: "Free for scientific and educational use with citation of LRO LOLA team."
+    max_size_bytes: 524288000 # 500 MB
+    allowed_drivers:
+      - "GTiff"
+      - "GeoTIFF"
+
+  - id: lroc-nac
+    name: "LROC NAC Polar Mosaics (ASU)"
+    host: "pds.lroc.asu.edu"
+    path_prefix: "/data/LRO-L-LROC-2-EDR-V1.0/LROLRC_0001/DATA/MAP/"
+    license: "NASA Open Data Policy (Public Domain)"
+    terms_note: "Free for scientific use with citation of ASU LROC team."
+    max_size_bytes: 1073741824 # 1 GB
+    allowed_drivers:
+      - "GTiff"
+      - "GeoTIFF"
+
+  - id: test-source
+    name: "Synthetic Test Source (Integration / Unit Testing)"
+    host: "test-source.seleneplan.internal"
+    path_prefix: "/test-data/"
+    license: "MIT / Synthetic"
+    terms_note: "Synthetic test data for verification"
+    max_size_bytes: 52428800 # 50 MB
+    allowed_drivers:
+      - "GTiff"
+      - "GeoTIFF"

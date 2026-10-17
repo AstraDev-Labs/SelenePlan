@@ -21,8 +21,16 @@ KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "http://localhost:8081")
 
 def is_gateway_reachable() -> bool:
     try:
-        r = httpx.get(f"{GATEWAY_BASE_URL}/healthz", timeout=1.0)
-        return r.status_code in {404, 429}  # Gateway is up and responding
+        # If rate limit is active from a prior run, allow up to 10s for token refill
+        for _ in range(6):
+            r = httpx.get(f"{GATEWAY_BASE_URL}/healthz", timeout=2.0)
+            if r.status_code == 404:
+                return True
+            if r.status_code == 429:
+                time.sleep(2)
+            else:
+                return False
+        return False
     except httpx.RequestError:
         return False
 

@@ -12,6 +12,24 @@ ignore = [
 python_version = "3.12"
 strict = true
 warn_unused_configs = true
+mypy_path = [
+    "libs/selene-auth/src",
+    "libs/selene-events/src",
+    "libs/selene-observability/src",
+    "libs/selene-geo/src",
+    "libs/selene-testing/src",
+    "services/hello-service/src",
+    "services/audit-service/src",
+    "services/ingestion-service/src",
+]
+
+[[tool.mypy.overrides]]
+module = [
+    "boto3.*",
+    "botocore.*",
+    "yaml.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -25,6 +43,7 @@ pythonpath = [
     "libs/selene-testing/src",
     "services/hello-service/src",
     "services/audit-service/src",
+    "services/ingestion-service/src",
 ]
 markers = [
     "integration: marks tests as integration tests (requires live external services)",
@@ -39,6 +58,7 @@ source = [
     "libs/selene-testing/src",
     "services/hello-service/src",
     "services/audit-service/src",
+    "services/ingestion-service/src",
 ]
 omit = [
     "*/tests/*",

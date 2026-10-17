@@ -99,6 +99,92 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Dataset' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/datasets/upload:
+    post:
+      tags: [datasets]
+      summary: Upload a dataset file
+      operationId: uploadDataset
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, name, kind, license]
+              properties:
+                file: { type: string, format: binary }
+                name: { type: string }
+                kind: { type: string, enum: [dem, orthoimage, ephemeris] }
+                license: { type: string }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dataset' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/datasets/{datasetId}:
+    get:
+      tags: [datasets]
+      summary: Get dataset metadata
+      operationId: getDataset
+      parameters:
+        - { name: datasetId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DatasetDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/datasets/{datasetId}/versions:
+    get:
+      tags: [datasets]
+      summary: List versions of a dataset
+      operationId: listDatasetVersions
+      parameters:
+        - { name: datasetId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/DatasetVersion' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/datasets/{datasetId}/versions/{version}:
+    get:
+      tags: [datasets]
+      summary: Get dataset version detail with manifest
+      operationId: getDatasetVersion
+      parameters:
+        - { name: datasetId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DatasetVersion' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /internal/v1/sources:
+    get:
+      tags: [datasets]
+      summary: List allowed sources
+      operationId: listAllowedSources
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AllowedSource' }
   /v1/products/{productId}/slice:
     get:
       tags: [products]
@@ -189,6 +275,11 @@ components:
       required: false
       schema: { type: string, maxLength: 128 }
   responses:
+    BadRequest:
+      description: Invalid request parameters or payload
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
     Unauthorized:
       description: Missing or invalid credentials
       content:
@@ -268,6 +359,51 @@ components:
       properties:
         id: { type: string, format: uuid }
         status: { type: string, enum: [queued, ingesting, registered, failed] }
+    DatasetDetail:
+      type: object
+      required: [id, org_id, project_id, name, kind, source_name, source_url, license, created_by, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        name: { type: string }
+        kind: { type: string, enum: [dem, orthoimage, ephemeris] }
+        source_name: { type: string }
+        source_url: { type: string }
+        license: { type: string }
+        terms_note: { type: string }
+        created_by: { type: string }
+        created_at: { type: string, format: date-time }
+    DatasetVersion:
+      type: object
+      required: [id, dataset_id, version, storage_uri, crs_wkt, resolution_m, bbox, size_bytes, sha256, status, manifest]
+      properties:
+        id: { type: string, format: uuid }
+        dataset_id: { type: string, format: uuid }
+        version: { type: integer, minimum: 1 }
+        storage_uri: { type: string }
+        crs_wkt: { type: string }
+        resolution_m: { type: number }
+        bbox:
+          type: array
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+        size_bytes: { type: integer }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        status: { type: string, enum: [queued, ingesting, registered, failed] }
+        manifest: { type: object }
+    AllowedSource:
+      type: object
+      required: [id, name, host, path_prefix, license, max_size_bytes]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        host: { type: string }
+        path_prefix: { type: string }
+        license: { type: string }
+        terms_note: { type: string }
+        max_size_bytes: { type: integer }
     SliceRef:
       type: object
       required: [product_id, t]
