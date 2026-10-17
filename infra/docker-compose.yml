@@ -116,18 +116,31 @@ services:
 
   gateway:
     <<: *restart
-    image: kong:3.7
-    environment:
-      KONG_DATABASE: "off"
-      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
-      KONG_PROXY_LISTEN: 0.0.0.0:8080
-      KONG_ADMIN_LISTEN: 127.0.0.1:8001
-      KONG_PROXY_ACCESS_LOG: /dev/stdout
-      KONG_PROXY_ERROR_LOG: /dev/stderr
+    image: envoyproxy/envoy:v1.30-latest
+    command: ["envoy", "-c", "/etc/envoy/envoy.yaml"]
     ports:
       - "8080:8080"
+      - "9901:9901"
     volumes:
-      - ./kong.yml:/kong/kong.yml:ro
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+    depends_on:
+      keycloak:
+        condition: service_started
+
+  hello-service:
+    <<: *restart
+    build:
+      context: ..
+      dockerfile: services/hello-service/Dockerfile
+    environment:
+      KEYCLOAK_ISSUER: http://localhost:8081/realms/selene
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/selene/protocol/openid-connect/certs
+      API_AUDIENCE: selene-api
+    ports:
+      - "8100:8100"
+    depends_on:
+      keycloak:
+        condition: service_started
 
   titiler:
     <<: *restart

@@ -16,6 +16,13 @@ warn_unused_configs = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["libs", "services"]
+pythonpath = [
+    ".",
+    "libs/selene-auth/src",
+    "libs/selene-events/src",
+    "libs/selene-observability/src",
+    "services/hello-service/src",
+]
 markers = [
     "integration: marks tests as integration tests (requires live external services)",
 ]
@@ -25,6 +32,7 @@ source = [
     "libs/selene-auth/src",
     "libs/selene-events/src",
     "libs/selene-observability/src",
+    "services/hello-service/src",
 ]
 omit = [
     "*/tests/*",

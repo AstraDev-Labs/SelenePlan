@@ -73,7 +73,18 @@ def ensure_test_client(keycloak_url: str) -> None:
     with urllib.request.urlopen(req_check) as resp:
         clients = json.loads(resp.read().decode("utf-8"))
         if clients:
-            return
+            # Check if defaultClientScopes has profile
+            scopes = clients[0].get("defaultClientScopes", [])
+            if "profile" in scopes:
+                return
+            # Delete stale client to recreate with profile scope
+            req_del = urllib.request.Request(
+                f"{keycloak_url}/admin/realms/selene/clients/{clients[0]['id']}",
+                headers=headers,
+                method="DELETE",
+            )
+            with urllib.request.urlopen(req_del):
+                pass
 
     # Create direct-grant test client
     client_payload = {
@@ -83,7 +94,7 @@ def ensure_test_client(keycloak_url: str) -> None:
         "publicClient": True,
         "directAccessGrantsEnabled": True,
         "standardFlowEnabled": False,
-        "defaultClientScopes": ["selene-default"],
+        "defaultClientScopes": ["selene-default", "profile", "email"],
     }
     req_create = urllib.request.Request(
         f"{keycloak_url}/admin/realms/selene/clients",
