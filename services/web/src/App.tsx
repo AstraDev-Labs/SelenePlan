@@ -22,6 +22,8 @@ export const App: React.FC = () => {
     showRoughness: false,
     showHazard: true,
     showHillshade: false,
+    showIllumination: true,
+    showPSR: false,
     colormap: "viridis",
     maxSlopeLimit: 15,
   });

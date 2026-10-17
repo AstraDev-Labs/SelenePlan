@@ -1,16 +1,16 @@
-import React, { useRef, useEffect, useState, useCallback } from "react";
-import { ZoomIn, ZoomOut, RotateCcw, MapPin } from "lucide-react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { MapPin, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { LayerState } from "./LayerControl";
 import { PointInspection } from "./InspectorPanel";
+import { TimelineScrubber } from "./TimelineScrubber";
 
 interface PolarMapProps {
   layers: LayerState;
-  onInspect: (inspection: PointInspection | null) => void;
+  onInspect: (data: PointInspection | null) => void;
 }
 
-// Colormap interpolators
+// Colormap ramps
 function getViridisColor(t: number): [number, number, number] {
-  // t in [0, 1]
   const clamped = Math.max(0, Math.min(1, t));
   const r = Math.round(68 + clamped * (253 - 68));
   const g = Math.round(1 + clamped * (231 - 1));
@@ -32,6 +32,18 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Timeline State (72 steps = 72 hours simulation of Shackleton South Pole AOI)
+  const TOTAL_STEPS = 72;
+  const [currentStep, setCurrentStep] = useState<number>(12);
+
+  // Precomputed ISO timestamps for timeline
+  const timestamps = useRef<string[]>(
+    Array.from({ length: TOTAL_STEPS }, (_, i) => {
+      const d = new Date(Date.UTC(2026, 2, 1, i, 0, 0));
+      return d.toISOString().replace(".000Z", "Z");
+    })
+  ).current;
 
   // Map spatial parameters: 500x500 grid, 20m resolution, origin = -5000m to +5000m
   const GRID_SIZE = 500;
@@ -58,13 +70,36 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     if (dist < 400.0) return 3.2; // Crater floor is relatively flat
     if (dist <= rimRadius) {
       // Steep walls
-      return 26.0 + 8.0 * Math.sin(dist / 300.0);
+      return 15.0 + 17.0 * (dist / rimRadius);
+    } else {
+      return Math.max(2.0, 14.0 * Math.exp(-(dist - rimRadius) / 1500.0));
     }
-    // Outer flanks
-    return Math.max(2.0, 18.0 * Math.exp(-(dist - rimRadius) / 1200.0));
   }, []);
 
-  // Render canvas
+  // Solar position at given step
+  const getSunGeometryAt = useCallback((step: number) => {
+    const az = (step * 5.0) % 360.0; // rotates 5 deg per hour
+    const el = 1.54 * Math.sin((step / TOTAL_STEPS) * 2 * Math.PI + 0.2); // oscillates +/- 1.54 deg
+    return { az, el };
+  }, [TOTAL_STEPS]);
+
+  // Point illumination evaluation
+  const isPointLit = useCallback((xM: number, yM: number, step: number) => {
+    const dist = Math.sqrt(xM * xM + yM * yM);
+    const { el } = getSunGeometryAt(step);
+    // Crater floor (dist < 1850m) rim horizon angle is ~31 deg -> permanently shadowed
+    if (dist < 1850.0) return false;
+    // Crater rim peak (2000m to 2300m) has near 0 deg horizon
+    if (dist >= 1950.0 && dist <= 2300.0) {
+      return el > -0.2; // high rim catches grazing sun
+    }
+    // Outside plains
+    return el > 0.4;
+  }, [getSunGeometryAt]);
+
+  const { az: currentSunAz, el: currentSunEl } = getSunGeometryAt(currentStep);
+
+  // Render Canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -75,7 +110,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     const height = canvas.height;
     ctx.clearRect(0, 0, width, height);
 
-    // Save initial state
     ctx.save();
     ctx.translate(width / 2 + pan.x, height / 2 + pan.y);
     ctx.scale(zoom, zoom);
@@ -83,7 +117,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     // Draw base map raster
     const imgData = ctx.createImageData(width, height);
     const data = imgData.data;
-
     const scale = (EXTENT_M * 2) / width;
 
     for (let py = 0; py < height; py += 2) {
@@ -92,31 +125,49 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
         const xM = (px - width / 2) * scale;
         const slope = getSlopeAt(xM, yM);
         const elev = getElevationAt(xM, yM);
+        const distM = Math.sqrt(xM * xM + yM * yM);
         const isHazard = slope > layers.maxSlopeLimit;
+        const lit = isPointLit(xM, yM, currentStep);
+        const isPSR = distM < 1850.0;
 
         let r = 25, g = 30, b = 45;
 
-        if (layers.showSlope) {
+        if (layers.showIllumination) {
+          if (lit) {
+            // Sunlit warm gold
+            r = 230; g = 190; b = 80;
+          } else {
+            // Shadowed deep obsidian blue
+            r = 15; g = 20; b = 35;
+          }
+        } else if (layers.showSlope) {
           const normSlope = Math.min(1.0, slope / 45.0);
           const [cr, cg, cb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
           r = cr;
           g = cg;
           b = cb;
         } else if (layers.showHillshade) {
-          // Low-angle polar sun from East (+x)
           const shade = Math.max(0.1, Math.min(1.0, 0.5 + 0.5 * (-xM / (Math.abs(xM) + 500))));
           r = Math.round(elev < -2000 ? 15 : 120 * shade);
           g = Math.round(elev < -2000 ? 20 : 130 * shade);
           b = Math.round(elev < -2000 ? 35 : 150 * shade);
         }
 
+        // PSR Overlay
+        if (layers.showPSR && isPSR) {
+          r = Math.round(r * 0.4 + 90);
+          g = Math.round(g * 0.3 + 40);
+          b = Math.round(b * 0.4 + 200);
+        }
+
+        // Rover Hazard Overlay
         if (layers.showHazard && isHazard) {
-          r = Math.min(255, r + 160);
+          r = Math.min(255, r + 150);
           g = Math.round(g * 0.3);
           b = Math.round(b * 0.3);
         }
 
-        // Fill 2x2 block for crisp performance
+        // 2x2 block fill
         for (let dy = 0; dy < 2; dy++) {
           for (let dx = 0; dx < 2; dx++) {
             const idx = ((py + dy) * width + (px + dx)) * 4;
@@ -144,7 +195,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
       ctx.stroke();
     });
 
-    // Crosshairs & Meridian Axes
+    // Crosshairs
     ctx.beginPath();
     ctx.moveTo(width / 2, 0);
     ctx.lineTo(width / 2, height);
@@ -153,16 +204,16 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Shackleton Crater Label
-    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+    // Annotations
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.font = "11px 'Space Grotesk', sans-serif";
     ctx.fillText("Shackleton Crater Rim", width / 2 + 10, height / 2 - 85);
     ctx.fillText("South Pole (90°S)", width / 2 + 6, height / 2 + 15);
 
     ctx.restore();
-  }, [zoom, pan, layers, getSlopeAt, getElevationAt]);
+  }, [zoom, pan, layers, currentStep, getSlopeAt, getElevationAt, isPointLit]);
 
-  // Mouse interaction for point inspection
+  // Mouse move point inspector
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -179,7 +230,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
       return;
     }
 
-    // Coordinate inverse projection
     const scale = (EXTENT_M * 2) / canvas.width / zoom;
     const xM = (px - (canvas.width / 2 + pan.x)) * scale;
     const yM = ((canvas.height / 2 + pan.y) - py) * scale;
@@ -187,8 +237,15 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     const slope = getSlopeAt(xM, yM);
     const elev = getElevationAt(xM, yM);
     const distM = Math.sqrt(xM * xM + yM * yM);
-    const lat = 90.0 - (distM / 30300.0); // Approx polar arc
+    const lat = 90.0 - (distM / 30300.0);
     const lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
+    const lit = isPointLit(xM, yM, currentStep);
+    const isPSR = distM < 1850.0;
+
+    // Build 48h series
+    const series = Array.from({ length: 48 }, (_, t) => isPointLit(xM, yM, t));
+    const litCount = series.filter(Boolean).length;
+    const litFrac = isPSR ? 0.0 : litCount / series.length;
 
     onInspect({
       x_m: xM,
@@ -200,67 +257,79 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
       aspect_deg: (Math.atan2(xM, yM) * 180.0) / Math.PI,
       roughness_m: slope * 0.08,
       is_hazard: slope > layers.maxSlopeLimit,
-      feature_name: distM < 2100 ? "Shackleton Rim" : "Connecting Ridge",
+      feature_name: distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge",
+      is_lit: lit,
+      lit_fraction: litFrac,
+      longest_dark_hours: isPSR ? 708.0 : (1.0 - litFrac) * 48.0,
+      is_psr: isPSR,
+      time_series: series,
     });
   };
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    setIsDragging(true);
-    const rect = e.currentTarget.getBoundingClientRect();
-    setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
   return (
-    <div className="relative w-full h-[620px] rounded-xl overflow-hidden border border-white/10 bg-black shadow-2xl">
-      <canvas
-        ref={canvasRef}
-        width={700}
-        height={620}
-        onMouseMove={handleMouseMove}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={() => { setIsDragging(false); onInspect(null); }}
-        className="w-full h-full cursor-crosshair block"
-        aria-label="2D Lunar South Pole Polar Map"
+    <div className="flex flex-col gap-3 w-full">
+      <div className="relative w-full h-[580px] rounded-xl overflow-hidden border border-white/10 bg-black shadow-2xl">
+        <canvas
+          ref={canvasRef}
+          width={700}
+          height={580}
+          onMouseMove={handleMouseMove}
+          onMouseDown={(e) => {
+            setIsDragging(true);
+            const rect = e.currentTarget.getBoundingClientRect();
+            setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          }}
+          onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => { setIsDragging(false); onInspect(null); }}
+          className="w-full h-full cursor-crosshair block"
+          aria-label="2D Lunar South Pole Polar Map"
+        />
+
+        {/* Map Control Buttons */}
+        <div className="absolute top-4 right-4 flex flex-col gap-1.5 glass-panel p-1.5">
+          <button
+            onClick={() => setZoom((z) => Math.min(3.0, z * 1.25))}
+            aria-label="Zoom In"
+            title="Zoom In"
+            className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setZoom((z) => Math.max(0.5, z * 0.8))}
+            aria-label="Zoom Out"
+            title="Zoom Out"
+            className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => { setZoom(1.0); setPan({ x: 0, y: 0 }); }}
+            aria-label="Reset View"
+            title="Reset View"
+            className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Projection Scale Indicator */}
+        <div className="absolute bottom-3 left-4 flex items-center gap-2 bg-gray-950/80 px-2.5 py-1 rounded border border-white/10 text-[10px] font-mono text-cyan-300">
+          <MapPin className="w-3 h-3 text-cyan-400" />
+          <span>Scale: 20 m/pixel | CRS: IAU_2015:30100 (Polar Stereographic)</span>
+        </div>
+      </div>
+
+      {/* Embedded Timeline Scrubber */}
+      <TimelineScrubber
+        totalSteps={TOTAL_STEPS}
+        currentStep={currentStep}
+        onStepChange={setCurrentStep}
+        timestamps={timestamps}
+        litFraction={0.62}
+        sunAzimuthDeg={currentSunAz}
+        sunElevationDeg={currentSunEl}
       />
-
-      {/* Map Control Buttons */}
-      <div className="absolute top-4 right-4 flex flex-col gap-1.5 glass-panel p-1.5">
-        <button
-          onClick={() => setZoom((z) => Math.min(3.0, z * 1.25))}
-          aria-label="Zoom In"
-          title="Zoom In"
-          className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => setZoom((z) => Math.max(0.5, z * 0.8))}
-          aria-label="Zoom Out"
-          title="Zoom Out"
-          className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-        <button
-          onClick={() => { setZoom(1.0); setPan({ x: 0, y: 0 }); }}
-          aria-label="Reset View"
-          title="Reset View"
-          className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Projection Scale Indicator */}
-      <div className="absolute bottom-3 left-4 flex items-center gap-2 bg-gray-950/80 px-2.5 py-1 rounded border border-white/10 text-[10px] font-mono text-cyan-300">
-        <MapPin className="w-3 h-3 text-cyan-400" />
-        <span>Scale: 20 m/pixel | CRS: IAU_2015:30100 (Polar Stereographic)</span>
-      </div>
     </div>
   );
 };

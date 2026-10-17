@@ -46,15 +46,17 @@ selene-plan/
 | **selene-events** | `libs/selene-events` | Py Library | ✅ Verified & Tested | Phase 0 |
 | **selene-observability** | `libs/selene-observability` | Py Library | ✅ Verified & Tested | Phase 0 |
 | **selene-geo** | `libs/selene-geo` | Py Library | ✅ Verified & Tested | Phase 1 |
+| **selene-horizon** | `libs/selene-horizon` | Py Library | ✅ Verified & Tested | Phase 2 |
 | **selene-testing** | `libs/selene-testing` | Py Library | ✅ Verified & Tested | Phase 1 |
 | **audit-service** | `services/audit-service` | Port 8101 | ✅ Verified & Tested | Phase 0 |
 | **hello-service** | `services/hello-service` | Port 8100 | ✅ Verified & Tested | Phase 0 |
 | **gateway** | `services/gateway` | Port 8000 | ✅ Verified & Tested | Phase 0 |
 | **identity** | `services/identity` | Port 8080 | ✅ Verified & Tested | Phase 0 |
+| **illumination-service** | `services/illumination-service` | Port 8105 | ✅ Verified & Tested | Phase 2 |
 | **ingestion-service** | `services/ingestion-service` | Port 8102 | ✅ Verified & Tested | Phase 1 |
 | **provenance-service** | `services/provenance-service` | Port 8111 | ✅ Verified & Tested | Phase 1/5 |
 | **terrain-service** | `services/terrain-service` | Port 8103 | ✅ Verified & Tested | Phase 1 |
-| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1 |
+| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1/2 |
 
 ## Local quick start
 ```bash

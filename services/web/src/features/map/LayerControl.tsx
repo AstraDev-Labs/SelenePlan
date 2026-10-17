@@ -9,6 +9,8 @@ export interface LayerState {
   showRoughness: boolean;
   showHazard: boolean;
   showHillshade: boolean;
+  showIllumination: boolean;
+  showPSR: boolean;
   colormap: Colormap;
   maxSlopeLimit: number;
 }
@@ -38,6 +40,26 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
 
       {/* Layer Toggles */}
       <div className="flex flex-col gap-2">
+        <button
+          onClick={() => toggle("showIllumination")}
+          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+            layers.showIllumination ? "bg-amber-500/20 border border-amber-500/40 text-amber-200" : "bg-white/5 text-gray-400"
+          }`}
+        >
+          <span>Solar Illumination (Time Slice)</span>
+          {layers.showIllumination ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+        </button>
+
+        <button
+          onClick={() => toggle("showPSR")}
+          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+            layers.showPSR ? "bg-indigo-500/20 border border-indigo-500/40 text-indigo-200" : "bg-white/5 text-gray-400"
+          }`}
+        >
+          <span>Permanent Shadow (PSR)</span>
+          {layers.showPSR ? <Eye className="w-3.5 h-3.5 text-indigo-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+        </button>
+
         <button
           onClick={() => toggle("showSlope")}
           className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${

@@ -16,6 +16,11 @@ data/
 *.pt
 *.pth
 *.zarr/
+*.bsp
+*.tls
+*.tpc
+*.bpc
+*.tf
 !tests/fixtures/**/*.tif
 
 # Python

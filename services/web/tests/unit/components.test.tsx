@@ -4,6 +4,7 @@ import { Banner } from "../../src/components/Banner";
 import { Navbar } from "../../src/components/Navbar";
 import { LayerControl } from "../../src/features/map/LayerControl";
 import { InspectorPanel } from "../../src/features/map/InspectorPanel";
+import { TimelineScrubber } from "../../src/features/map/TimelineScrubber";
 import { useAuthStore } from "../../src/auth/store";
 
 describe("Web UI Components", () => {
@@ -53,6 +54,8 @@ describe("Web UI Components", () => {
       showRoughness: false,
       showHazard: true,
       showHillshade: false,
+      showIllumination: true,
+      showPSR: false,
       colormap: "viridis" as const,
       maxSlopeLimit: 15,
     };
@@ -92,6 +95,40 @@ describe("Web UI Components", () => {
     expect(screen.getByText("Shackleton Inner Wall")).toBeInTheDocument();
     expect(screen.getByText("-1850.4 m")).toBeInTheDocument();
     expect(screen.getByText("24.3°")).toBeInTheDocument();
-    expect(screen.getByText("HAZARD DETECTED")).toBeInTheDocument();
+    expect(screen.getByText("TERRAIN HAZARD")).toBeInTheDocument();
+  });
+
+  it("handles playback, scrubbing, and speed changes in TimelineScrubber", () => {
+    const handleStep = vi.fn();
+    const timestamps = ["2026-03-01T00:00:00Z", "2026-03-01T01:00:00Z", "2026-03-01T02:00:00Z"];
+
+    render(
+      <TimelineScrubber
+        totalSteps={3}
+        currentStep={1}
+        onStepChange={handleStep}
+        timestamps={timestamps}
+        litFraction={0.75}
+      />
+    );
+
+    // Verify telemetry
+    expect(screen.getByText("2026-03-01T01:00:00Z")).toBeInTheDocument();
+    expect(screen.getByText("75.0%")).toBeInTheDocument();
+
+    // Toggle play button
+    const playBtn = screen.getByRole("button", { name: /Play Timeline Playback/i });
+    fireEvent.click(playBtn);
+    expect(screen.getByRole("button", { name: /Pause Timeline Playback/i })).toBeInTheDocument();
+
+    // Change speed
+    const speed5x = screen.getByRole("button", { name: /Set playback speed 5x/i });
+    fireEvent.click(speed5x);
+    expect(speed5x).toHaveClass("bg-cyan-500/30");
+
+    // Scrubber slider change
+    const slider = screen.getByLabelText(/Timeline Scrubber Slider/i);
+    fireEvent.change(slider, { target: { value: "2" } });
+    expect(handleStep).toHaveBeenCalledWith(2);
   });
 });
