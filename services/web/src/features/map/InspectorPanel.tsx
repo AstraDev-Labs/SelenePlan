@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Crosshair, Moon, ShieldAlert, Sun } from "lucide-react";
+import { CheckCircle2, Crosshair, Moon, Radio, ShieldAlert, Sun, Wifi, WifiOff } from "lucide-react";
 
 export interface PointInspection {
   x_m: number;
@@ -17,6 +17,11 @@ export interface PointInspection {
   longest_dark_hours?: number;
   is_psr?: boolean;
   time_series?: boolean[];
+  earth_visible?: boolean;
+  earth_elevation_deg?: number;
+  earth_visible_fraction?: number;
+  longest_blackout_hours?: number;
+  earth_series?: boolean[];
 }
 
 interface InspectorPanelProps {
@@ -100,24 +105,77 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
         </div>
       )}
 
-      {/* Sparkline series */}
-      {inspection.time_series && inspection.time_series.length > 0 && (
-        <div className="flex flex-col gap-1 bg-black/40 p-2 rounded border border-white/5">
-          <div className="flex items-center justify-between text-[10px] text-gray-400">
-            <span>Solar Series ({inspection.time_series.length}h)</span>
-            {inspection.longest_dark_hours !== undefined && (
-              <span className="text-rose-400">Max Dark: {inspection.longest_dark_hours.toFixed(0)}h</span>
+      {/* Earth Communication Line-of-Sight Status */}
+      {inspection.earth_visible !== undefined && (
+        <div
+          className={`flex items-center justify-between p-2 rounded border ${
+            inspection.earth_visible
+              ? "bg-cyan-950/40 border-cyan-500/40 text-cyan-200"
+              : "bg-red-950/30 border-red-500/40 text-red-300"
+          }`}
+        >
+          <div className="flex items-center gap-1.5 font-bold font-sans">
+            {inspection.earth_visible ? (
+              <Wifi className="w-4 h-4 text-cyan-400 animate-pulse" aria-hidden="true" />
+            ) : (
+              <WifiOff className="w-4 h-4 text-red-400" aria-hidden="true" />
             )}
+            <span>{inspection.earth_visible ? "EARTH COMM: VISIBLE" : "EARTH COMM: BLACKOUT"}</span>
           </div>
-          <div className="flex items-center gap-0.5 h-3 w-full bg-black/60 p-0.5 rounded">
-            {inspection.time_series.slice(0, 48).map((lit, idx) => (
-              <div
-                key={idx}
-                className={`flex-1 h-full rounded-[1px] ${lit ? "bg-amber-400" : "bg-indigo-900"}`}
-                title={`Hour ${idx}: ${lit ? "Lit" : "Dark"}`}
-              />
-            ))}
+          <span className="text-[10px] font-mono">
+            {inspection.earth_elevation_deg !== undefined ? `${inspection.earth_elevation_deg >= 0 ? "+" : ""}${inspection.earth_elevation_deg.toFixed(1)}°` : ""}
+          </span>
+        </div>
+      )}
+
+      {/* Combined Sun & Earth Dual Timeline Strip */}
+      {((inspection.time_series && inspection.time_series.length > 0) || (inspection.earth_series && inspection.earth_series.length > 0)) && (
+        <div className="flex flex-col gap-1.5 bg-black/40 p-2.5 rounded border border-white/10">
+          <div className="flex items-center justify-between text-[10px] text-gray-300 font-sans font-semibold border-b border-white/5 pb-1">
+            <span className="flex items-center gap-1">
+              <Radio className="w-3 h-3 text-cyan-400" />
+              <span>Combined Sun & Earth Profile</span>
+            </span>
+            <span className="text-gray-400 font-mono">48-Hour</span>
           </div>
+
+          {/* Sun Track */}
+          {inspection.time_series && (
+            <div className="space-y-0.5">
+              <div className="flex justify-between text-[9px] text-amber-300">
+                <span>[SUN] Sunlight Track:</span>
+                <span>{inspection.lit_fraction !== undefined ? `${(inspection.lit_fraction * 100).toFixed(0)}%` : ""}</span>
+              </div>
+              <div className="flex items-center gap-0.5 h-2.5 w-full bg-black/60 p-0.5 rounded">
+                {inspection.time_series.slice(0, 48).map((lit, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex-1 h-full rounded-[1px] ${lit ? "bg-amber-400" : "bg-indigo-950"}`}
+                    title={`Hour ${idx}: ${lit ? "Sunlit" : "Dark"}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Earth Track */}
+          {inspection.earth_series && (
+            <div className="space-y-0.5 pt-0.5">
+              <div className="flex justify-between text-[9px] text-cyan-300">
+                <span>[EARTH] Line-of-Sight Track:</span>
+                <span>{inspection.earth_visible_fraction !== undefined ? `${(inspection.earth_visible_fraction * 100).toFixed(0)}%` : ""}</span>
+              </div>
+              <div className="flex items-center gap-0.5 h-2.5 w-full bg-black/60 p-0.5 rounded">
+                {inspection.earth_series.slice(0, 48).map((vis, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex-1 h-full rounded-[1px] ${vis ? "bg-cyan-400" : "bg-red-950"}`}
+                    title={`Hour ${idx}: ${vis ? "Earth Visible" : "Blackout"}`}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

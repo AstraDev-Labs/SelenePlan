@@ -11,6 +11,7 @@ export interface LayerState {
   showHillshade: boolean;
   showIllumination: boolean;
   showPSR: boolean;
+  showEarthVisibility: boolean;
   colormap: Colormap;
   maxSlopeLimit: number;
 }
@@ -40,6 +41,16 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
 
       {/* Layer Toggles */}
       <div className="flex flex-col gap-2">
+        <button
+          onClick={() => toggle("showEarthVisibility")}
+          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+            layers.showEarthVisibility ? "bg-cyan-500/20 border border-cyan-500/40 text-cyan-200" : "bg-white/5 text-gray-400"
+          }`}
+        >
+          <span>Earth Visibility (Line of Sight)</span>
+          {layers.showEarthVisibility ? <Eye className="w-3.5 h-3.5 text-cyan-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+        </button>
+
         <button
           onClick={() => toggle("showIllumination")}
           className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${

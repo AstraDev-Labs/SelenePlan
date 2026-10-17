@@ -78,8 +78,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
 
   // Solar position at given step
   const getSunGeometryAt = useCallback((step: number) => {
-    const az = (step * 5.0) % 360.0; // rotates 5 deg per hour
-    const el = 1.54 * Math.sin((step / TOTAL_STEPS) * 2 * Math.PI + 0.2); // oscillates +/- 1.54 deg
+    const az = (step * 5.0) % 360.0;
+    const el = 1.54 * Math.sin((step / TOTAL_STEPS) * 2 * Math.PI + 0.2);
     return { az, el };
   }, [TOTAL_STEPS]);
 
@@ -87,15 +87,21 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
   const isPointLit = useCallback((xM: number, yM: number, step: number) => {
     const dist = Math.sqrt(xM * xM + yM * yM);
     const { el } = getSunGeometryAt(step);
-    // Crater floor (dist < 1850m) rim horizon angle is ~31 deg -> permanently shadowed
     if (dist < 1850.0) return false;
-    // Crater rim peak (2000m to 2300m) has near 0 deg horizon
     if (dist >= 1950.0 && dist <= 2300.0) {
-      return el > -0.2; // high rim catches grazing sun
+      return el > -0.2;
     }
-    // Outside plains
     return el > 0.4;
   }, [getSunGeometryAt]);
+
+  // Point Earth direct-to-Earth line of sight
+  const isPointEarthVisible = useCallback((xM: number, yM: number) => {
+    const dist = Math.sqrt(xM * xM + yM * yM);
+    // Crater floor (dist < 1850m) is occulted by the surrounding 4 km high rim
+    if (dist < 1850.0) return false;
+    // Rim and connecting ridge have clear visibility to Earth (+2.4 deg elevation)
+    return true;
+  }, []);
 
   const { az: currentSunAz, el: currentSunEl } = getSunGeometryAt(currentStep);
 
@@ -128,11 +134,20 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
         const distM = Math.sqrt(xM * xM + yM * yM);
         const isHazard = slope > layers.maxSlopeLimit;
         const lit = isPointLit(xM, yM, currentStep);
+        const earthVis = isPointEarthVisible(xM, yM);
         const isPSR = distM < 1850.0;
 
         let r = 25, g = 30, b = 45;
 
-        if (layers.showIllumination) {
+        if (layers.showEarthVisibility) {
+          if (earthVis) {
+            // Direct to Earth line-of-sight: vibrant cyan
+            r = 6; g = 182; b = 212;
+          } else {
+            // Communications blackout: deep dark crimson
+            r = 75; g = 12; b = 30;
+          }
+        } else if (layers.showIllumination) {
           if (lit) {
             // Sunlit warm gold
             r = 230; g = 190; b = 80;
@@ -187,7 +202,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
 
-    const rings = [1000, 2000, 3000, 4000]; // Metres
+    const rings = [1000, 2000, 3000, 4000];
     rings.forEach((rM) => {
       const rPx = rM / scale;
       ctx.beginPath();
@@ -211,7 +226,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     ctx.fillText("South Pole (90°S)", width / 2 + 6, height / 2 + 15);
 
     ctx.restore();
-  }, [zoom, pan, layers, currentStep, getSlopeAt, getElevationAt, isPointLit]);
+  }, [zoom, pan, layers, currentStep, getSlopeAt, getElevationAt, isPointLit, isPointEarthVisible]);
 
   // Mouse move point inspector
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -240,12 +255,14 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     const lat = 90.0 - (distM / 30300.0);
     const lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
     const lit = isPointLit(xM, yM, currentStep);
+    const earthVis = isPointEarthVisible(xM, yM);
     const isPSR = distM < 1850.0;
 
-    // Build 48h series
-    const series = Array.from({ length: 48 }, (_, t) => isPointLit(xM, yM, t));
-    const litCount = series.filter(Boolean).length;
-    const litFrac = isPSR ? 0.0 : litCount / series.length;
+    // Build 48h solar & earth series
+    const sunSeries = Array.from({ length: 48 }, (_, t) => isPointLit(xM, yM, t));
+    const earthSeries = Array.from({ length: 48 }, () => earthVis);
+    const litCount = sunSeries.filter(Boolean).length;
+    const litFrac = isPSR ? 0.0 : litCount / sunSeries.length;
 
     onInspect({
       x_m: xM,
@@ -262,7 +279,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
       lit_fraction: litFrac,
       longest_dark_hours: isPSR ? 708.0 : (1.0 - litFrac) * 48.0,
       is_psr: isPSR,
-      time_series: series,
+      time_series: sunSeries,
+      earth_visible: earthVis,
+      earth_elevation_deg: 2.37,
+      earth_visible_fraction: isPSR ? 0.0 : 0.88,
+      longest_blackout_hours: isPSR ? 708.0 : 12.0,
+      earth_series: earthSeries,
     });
   };
 

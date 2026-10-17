@@ -56,6 +56,7 @@ describe("Web UI Components", () => {
       showHillshade: false,
       showIllumination: true,
       showPSR: false,
+      showEarthVisibility: false,
       colormap: "viridis" as const,
       maxSlopeLimit: 15,
     };
