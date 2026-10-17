@@ -22,6 +22,7 @@ pythonpath = [
     "libs/selene-events/src",
     "libs/selene-observability/src",
     "services/hello-service/src",
+    "services/audit-service/src",
 ]
 markers = [
     "integration: marks tests as integration tests (requires live external services)",
@@ -33,6 +34,7 @@ source = [
     "libs/selene-events/src",
     "libs/selene-observability/src",
     "services/hello-service/src",
+    "services/audit-service/src",
 ]
 omit = [
     "*/tests/*",

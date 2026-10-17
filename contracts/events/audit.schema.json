@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://seleneplan.io/contracts/events/audit.schema.json",
+  "title": "AuditEventPayload",
+  "description": "Payload schema for selene.audit.event.v1 event data.",
+  "type": "object",
+  "required": [
+    "actor_sub",
+    "actor_type",
+    "action",
+    "resource_type",
+    "resource_id",
+    "details",
+    "source_service"
+  ],
+  "properties": {
+    "actor_sub": {
+      "type": "string",
+      "minLength": 1
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": ["user", "service"]
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "auth.login",
+        "auth.logout",
+        "auth.failed",
+        "user.role.granted",
+        "user.role.revoked",
+        "project.created",
+        "scenario.created",
+        "run.started",
+        "run.finished",
+        "dataset.registered",
+        "model.registered",
+        "plan.created",
+        "plan.submitted",
+        "plan.approved",
+        "plan.rejected",
+        "plan.signed",
+        "plan.exported",
+        "plan.verified",
+        "report.generated",
+        "audit.integrity.checked",
+        "admin.config.changed"
+      ]
+    },
+    "resource_type": {
+      "type": "string",
+      "minLength": 1
+    },
+    "resource_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "org_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "project_id": {
+      "type": ["string", "null"],
+      "format": "uuid"
+    },
+    "details": {
+      "type": "object"
+    },
+    "source_service": {
+      "type": "string",
+      "minLength": 1
+    },
+    "request_ip": {
+      "type": ["string", "null"]
+    },
+    "trace_id": {
+      "type": ["string", "null"]
+    }
+  },
+  "additionalProperties": false
+}

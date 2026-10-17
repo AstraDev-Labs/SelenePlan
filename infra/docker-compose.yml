@@ -138,7 +138,34 @@ services:
       API_AUDIENCE: selene-api
     ports:
       - "8100:8100"
+
+  audit-service:
+    <<: *restart
+    build:
+      context: ..
+      dockerfile: services/audit-service/Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: selene-data
+      KEYCLOAK_ISSUER: http://localhost:8081/realms/selene
+      KEYCLOAK_JWKS_URL: http://keycloak:8080/realms/selene/protocol/openid-connect/certs
+      API_AUDIENCE: selene-api
+    ports:
+      - "8109:8109"
     depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
       keycloak:
         condition: service_started
 
