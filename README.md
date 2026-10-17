@@ -67,6 +67,10 @@ selene-plan/
 | **Observability & SLOs** | `infra/monitoring/` | Prometheus & Grafana | ✅ Verified & Tested | Phase 6 |
 | **Security & Pen-test** | `docs/security/pentest-report.md` | OWASP ASVS v4.0 | ✅ Verified & Tested | Phase 6 |
 | **Operational Runbooks** | `docs/runbooks/` | Disaster Recovery & Ops | ✅ Verified & Tested | Phase 6 |
+| **System Documentation** | `docs/user-guide.md`, `docs/operations-guide.md` | Guides & C4 Models | ✅ Verified & Tested | Phase 7 |
+| **API Documentation** | `docs/api/index.html` | Redoc OpenAPI v1.0.0 | ✅ Verified & Tested | Phase 7 |
+| **Novelty & Publication** | `docs/novelty.md`, `docs/paper-outline.md` | Research & Invention Disclosure | ✅ Verified & Tested | Phase 7 |
+| **Final Release v1.0.0** | `CHANGELOG.md`, `THIRD_PARTY.md` | Production Tag & Distribution | ✅ Verified & Tested | Phase 7 |
 
 ## Local quick start
 ```bash
@@ -74,6 +78,17 @@ cp infra/.env.example infra/.env
 docker compose -f infra/docker-compose.yml --env-file infra/.env up -d
 python -m pytest libs services
 ```
+
+## Documentation & Architecture
+- **User Guide (Analyst, Approver, Auditor):** [`docs/user-guide.md`](file:///docs/user-guide.md)
+- **Operations & SRE Guide:** [`docs/operations-guide.md`](file:///docs/operations-guide.md)
+- **Interactive API Documentation:** [`docs/api/index.html`](file:///docs/api/index.html)
+- **C4 Architecture Diagrams (Context, Container, Components):** [`docs/architecture/c4-models.md`](file:///docs/architecture/c4-models.md)
+- **Novelty Statement & Prior-Art Comparison:** [`docs/novelty.md`](file:///docs/novelty.md)
+- **Academic Paper Outline:** [`docs/paper-outline.md`](file:///docs/paper-outline.md)
+- **Patent / Invention Disclosure:** [`docs/invention-disclosure.md`](file:///docs/invention-disclosure.md)
+- **Final End-to-End Demo & Shot List:** [`docs/demos/final-demo.md`](file:///docs/demos/final-demo.md)
+- **Final Architectural & Threat Audit:** [`docs/final-review.md`](file:///docs/final-review.md)
 
 ## Kubernetes & Enterprise Deployment
 Production deployments utilize Helm packaging (`infra/helm/seleneplan`) with strict Pod Security Standards:
