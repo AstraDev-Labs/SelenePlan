@@ -257,6 +257,87 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChainStatus' }
+  /v1/artifacts/{id}:
+    get:
+      tags: [provenance]
+      summary: Get artifact metadata
+      operationId: getArtifact
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactDetail' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/lineage/{id}:
+    get:
+      tags: [provenance]
+      summary: Get artifact lineage graph
+      operationId: getLineage
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: direction, in: query, required: false, schema: { type: string, enum: [up, down], default: up } }
+        - { name: depth, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 50, default: 10 } }
+      responses:
+        '200':
+          description: Lineage DAG
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LineageDAG' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/lineage/{id}/replay-spec:
+    get:
+      tags: [provenance]
+      summary: Get replay recipe for an artifact
+      operationId: getReplaySpec
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Replay specification
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReplaySpec' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /internal/v1/artifacts:
+    post:
+      tags: [provenance]
+      summary: Register an artifact and lineage
+      operationId: registerArtifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ArtifactRegisterRequest' }
+      responses:
+        '201':
+          description: Artifact registered
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactDetail' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /internal/v1/verify-artifact:
+    post:
+      tags: [provenance]
+      summary: Verify artifact integrity against storage and registry
+      operationId: verifyArtifact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyArtifactRequest' }
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ArtifactVerification' }
 components:
   securitySchemes:
     bearerAuth:
@@ -459,3 +540,89 @@ components:
         checked_from_seq: { type: integer }
         checked_to_seq: { type: integer }
         first_break_seq: { type: [integer, 'null'] }
+    ArtifactDetail:
+      type: object
+      required: [id, org_id, project_id, kind, uri, sha256, size_bytes, created_by_service, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        kind: { type: string }
+        uri: { type: string }
+        sha256: { type: string }
+        size_bytes: { type: integer }
+        created_by_service: { type: string }
+        metadata: { type: object, nullable: true }
+        created_at: { type: string, format: date-time }
+    ArtifactRegisterRequest:
+      type: object
+      required: [artifact_id, org_id, project_id, kind, uri, sha256, size_bytes, created_by_service]
+      properties:
+        artifact_id: { type: string, format: uuid }
+        org_id: { type: string, format: uuid }
+        project_id: { type: string, format: uuid }
+        kind: { type: string }
+        uri: { type: string }
+        sha256: { type: string }
+        size_bytes: { type: integer }
+        created_by_service: { type: string }
+        metadata: { type: object, nullable: true }
+        manifest: { type: object, nullable: true }
+        parent_edges:
+          type: array
+          items: { type: object }
+    LineageDAG:
+      type: object
+      required: [root_artifact_id, direction, depth_queried, nodes, edges]
+      properties:
+        root_artifact_id: { type: string, format: uuid }
+        direction: { type: string }
+        depth_queried: { type: integer }
+        nodes:
+          type: array
+          items: { $ref: '#/components/schemas/ArtifactDetail' }
+        edges:
+          type: array
+          items:
+            type: object
+            required: [id, child_artifact_id, parent_artifact_id, relation]
+            properties:
+              id: { type: string, format: uuid }
+              child_artifact_id: { type: string, format: uuid }
+              parent_artifact_id: { type: string, format: uuid }
+              relation: { type: string }
+              params_hash: { type: string, nullable: true }
+    ReplaySpec:
+      type: object
+      required: [schema, artifact_id, kind, sha256, uri, created_by_service, lineage_dag]
+      properties:
+        schema: { type: string }
+        artifact_id: { type: string, format: uuid }
+        kind: { type: string }
+        sha256: { type: string }
+        uri: { type: string }
+        created_by_service: { type: string }
+        manifest: { type: object, nullable: true }
+        source_inputs:
+          type: array
+          items: { type: object }
+        lineage_dag: { type: object }
+        parameters: { type: object, nullable: true }
+    VerifyArtifactRequest:
+      type: object
+      required: [artifact_id]
+      properties:
+        artifact_id: { type: string, format: uuid }
+        expected_sha256: { type: string, nullable: true }
+        read_storage: { type: boolean, default: true }
+    ArtifactVerification:
+      type: object
+      required: [valid, artifact_id]
+      properties:
+        valid: { type: boolean }
+        artifact_id: { type: string, format: uuid }
+        registered_sha256: { type: string, nullable: true }
+        actual_sha256: { type: string, nullable: true }
+        storage_uri: { type: string, nullable: true }
+        manifest_valid: { type: boolean, nullable: true }
+        reason: { type: string, nullable: true }

@@ -21,6 +21,7 @@ mypy_path = [
     "services/hello-service/src",
     "services/audit-service/src",
     "services/ingestion-service/src",
+    "services/provenance-service/src",
 ]
 
 [[tool.mypy.overrides]]
@@ -44,6 +45,7 @@ pythonpath = [
     "services/hello-service/src",
     "services/audit-service/src",
     "services/ingestion-service/src",
+    "services/provenance-service/src",
 ]
 markers = [
     "integration: marks tests as integration tests (requires live external services)",
@@ -59,6 +61,7 @@ source = [
     "services/hello-service/src",
     "services/audit-service/src",
     "services/ingestion-service/src",
+    "services/provenance-service/src",
 ]
 omit = [
     "*/tests/*",
