@@ -38,10 +38,28 @@ selene-plan/
 4. Run phases in order with `prompts/phase-0-foundation.md`, then `phase-1-terrain.md`, and so on. **Do one phase at a time and review the result before moving on.**
 5. Keep `docs/` and `services/*/SPEC.md` as the source of truth. When the design changes, update the doc in the same commit and add an ADR for significant decisions.
 
-## Local quick start (after Phase 0)
-```
+## Services & Platform Status
+
+| Service / Library | Directory | Port / Type | Status | Phase |
+| :--- | :--- | :--- | :--- | :--- |
+| **selene-auth** | `libs/selene-auth` | Py Library | ✅ Verified & Tested | Phase 0 |
+| **selene-events** | `libs/selene-events` | Py Library | ✅ Verified & Tested | Phase 0 |
+| **selene-observability** | `libs/selene-observability` | Py Library | ✅ Verified & Tested | Phase 0 |
+| **selene-geo** | `libs/selene-geo` | Py Library | ✅ Verified & Tested | Phase 1 |
+| **selene-testing** | `libs/selene-testing` | Py Library | ✅ Verified & Tested | Phase 1 |
+| **audit-service** | `services/audit-service` | Port 8101 | ✅ Verified & Tested | Phase 0 |
+| **hello-service** | `services/hello-service` | Port 8100 | ✅ Verified & Tested | Phase 0 |
+| **gateway** | `services/gateway` | Port 8000 | ✅ Verified & Tested | Phase 0 |
+| **identity** | `services/identity` | Port 8080 | ✅ Verified & Tested | Phase 0 |
+| **ingestion-service** | `services/ingestion-service` | Port 8102 | ✅ Verified & Tested | Phase 1 |
+| **provenance-service** | `services/provenance-service` | Port 8111 | ✅ Verified & Tested | Phase 1/5 |
+| **terrain-service** | `services/terrain-service` | Port 8103 | ✅ Verified & Tested | Phase 1 |
+
+## Local quick start
+```bash
 cp infra/.env.example infra/.env
 docker compose -f infra/docker-compose.yml --env-file infra/.env up -d
+python -m pytest libs services
 ```
 
 ## Important caveats

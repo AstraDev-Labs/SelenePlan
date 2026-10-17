@@ -185,6 +185,51 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/AllowedSource' }
+  /v1/products/{id}:
+    get:
+      tags: [products]
+      summary: Product metadata and raster stats
+      operationId: getProduct
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Product metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductMetadataResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/products/{id}/stats:
+    get:
+      tags: [products]
+      summary: Fast quantile summary for product
+      operationId: getProductStats
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Fast stats summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProductStatsResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /internal/v1/terrain/analyze:
+    post:
+      tags: [terrain]
+      summary: Trigger terrain analysis pipeline
+      operationId: analyzeTerrain
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TerrainAnalyzeRequest' }
+      responses:
+        '200':
+          description: Terrain analysis products
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TerrainAnalyzeResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
   /v1/products/{productId}/slice:
     get:
       tags: [products]
@@ -626,3 +671,63 @@ components:
         storage_uri: { type: string, nullable: true }
         manifest_valid: { type: boolean, nullable: true }
         reason: { type: string, nullable: true }
+    ProductMetadataResponse:
+      type: object
+      required: [product_id, project_id, product_type, uri, sha256, shape, resolution_m, crs, stats]
+      properties:
+        product_id: { type: string, format: uuid }
+        project_id: { type: string }
+        source_dataset_id: { type: string }
+        product_type: { type: string, enum: [slope, aspect, roughness, hazard] }
+        uri: { type: string }
+        sha256: { type: string }
+        shape:
+          type: array
+          items: { type: integer }
+        resolution_m: { type: number }
+        crs: { type: string }
+        stats: { $ref: '#/components/schemas/ProductStatsResponse' }
+        manifest: { type: object }
+    ProductStatsResponse:
+      type: object
+      required: [valid_pixels, total_pixels, valid_fraction]
+      properties:
+        min: { type: number, nullable: true }
+        max: { type: number, nullable: true }
+        mean: { type: number, nullable: true }
+        std: { type: number, nullable: true }
+        p50: { type: number, nullable: true }
+        p90: { type: number, nullable: true }
+        p99: { type: number, nullable: true }
+        hazard_fraction: { type: number, nullable: true }
+        safe_fraction: { type: number, nullable: true }
+        valid_pixels: { type: integer }
+        total_pixels: { type: integer }
+        valid_fraction: { type: number }
+    TerrainAnalyzeRequest:
+      type: object
+      required: [project_id, dem_uri]
+      properties:
+        project_id: { type: string }
+        source_dataset_id: { type: string, default: "dem" }
+        dem_uri: { type: string }
+        resolution_m: { type: number, default: 20.0 }
+        crs: { type: string, default: "IAU_2015:30100" }
+        max_slope_deg: { type: number, default: 15.0 }
+        max_roughness_m: { type: number, default: 0.35 }
+        tile_size: { type: integer, default: 512 }
+        halo: { type: integer, default: 1 }
+    TerrainAnalyzeResponse:
+      type: object
+      required: [status, project_id, products]
+      properties:
+        status: { type: string }
+        project_id: { type: string }
+        source_dataset_id: { type: string }
+        products:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ProductMetadataResponse'
+        errors:
+          type: array
+          items: { type: string }
