@@ -1,8 +1,8 @@
 """Performance benchmark for selene-horizon ray-tracing engine on 1k x 1k and tiled AOIs."""
 
 import time
-import numpy as np
 
+import numpy as np
 from selene_horizon.horizon import compute_horizon_profile
 
 
@@ -20,10 +20,10 @@ def run_benchmark(
     )
 
     print(
-        f"Running benchmark on {size}x{size} DEM ({size*size:,} cells, {azimuth_bins} azimuth bins)..."
+        f"Running benchmark on {size}x{size} DEM ({size * size:,} cells, {azimuth_bins} azimuth bins)..."
     )
     t0 = time.perf_counter()
-    horizon, _ = compute_horizon_profile(
+    _horizon, _ = compute_horizon_profile(
         dem=dem,
         cell_size_m=20.0,
         azimuth_bins=azimuth_bins,

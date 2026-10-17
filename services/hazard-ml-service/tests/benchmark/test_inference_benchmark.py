@@ -1,9 +1,9 @@
 """CPU inference throughput benchmark for crater detection."""
 
 from pathlib import Path
+
 import numpy as np
 import onnxruntime as ort
-
 from hazard_ml_service.inference.engine import InferenceEngine
 
 

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 import numpy as np
 
@@ -111,13 +111,11 @@ def compute_blackout_stats(
     for val in arr:
         if not val:
             curr_blackout += 1
-            if curr_blackout > max_blackout:
-                max_blackout = curr_blackout
+            max_blackout = max(max_blackout, curr_blackout)
             curr_window = 0
         else:
             curr_window += 1
-            if curr_window > max_window:
-                max_window = curr_window
+            max_window = max(max_window, curr_window)
             curr_blackout = 0
 
     # Count windows

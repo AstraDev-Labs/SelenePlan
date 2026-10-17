@@ -1,12 +1,13 @@
 """Unit tests for overlapping tiling, NMS deduplication, and heatmap stitching."""
 
 import math
+
 import numpy as np
-from hazard_ml_service.inference.tiler import generate_overlapping_tiles, stitch_hazard_heatmap
 from hazard_ml_service.inference.nms import (
     circle_iou,
     non_maximum_suppression_circles,
 )
+from hazard_ml_service.inference.tiler import generate_overlapping_tiles, stitch_hazard_heatmap
 
 
 def test_circle_iou_math() -> None:

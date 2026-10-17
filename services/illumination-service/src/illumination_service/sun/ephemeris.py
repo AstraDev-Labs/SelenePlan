@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
-
 
 from selene_geo.spice import (
     compute_local_az_el,
@@ -72,7 +71,7 @@ class SunGeometryEngine:
         if time_step_s <= 0:
             raise ValueError("time_step_s must be positive")
 
-        num_steps = int(math.floor((et_end - et_start) / time_step_s)) + 1
+        num_steps = math.floor((et_end - et_start) / time_step_s) + 1
         steps: list[SunStepGeometry] = []
 
         for i in range(num_steps):

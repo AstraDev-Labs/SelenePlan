@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import hashlib
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
+from typing import Self
 
 import numpy as np
 import spiceypy as spice
@@ -74,7 +75,7 @@ class SpiceManager:
         spice.kclear()
         self._loaded_kernels.clear()
 
-    def __enter__(self) -> SpiceManager:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
@@ -242,7 +243,7 @@ def compute_sun_trajectory(
     if step_seconds <= 0:
         raise ValueError("step_seconds must be positive")
 
-    num_steps = int(math.floor((et_end - et_start) / step_seconds)) + 1
+    num_steps = math.floor((et_end - et_start) / step_seconds) + 1
     ets = np.linspace(et_start, et_start + (num_steps - 1) * step_seconds, num_steps)
 
     az_out = np.zeros(num_steps, dtype=np.float64)

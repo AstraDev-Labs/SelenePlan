@@ -3,7 +3,6 @@
 import math
 
 import numpy as np
-
 from selene_horizon.horizon import (
     compute_horizon_profile,
     compute_padding_margin_m,

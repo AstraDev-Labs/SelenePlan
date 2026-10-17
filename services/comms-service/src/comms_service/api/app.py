@@ -5,11 +5,10 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from comms_service.api.routes import router
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-
-from comms_service.api.routes import router
 
 REQUEST_COUNT = Counter(
     "comms_http_requests_total",

@@ -1,13 +1,14 @@
 """Security integrity tests for ML model loading and operator allowlists (SEC-09, T7)."""
 
 from pathlib import Path
+
 import pytest
+from hazard_ml_service.inference.validator import ModelValidationError, validate_onnx_model
 from hazard_ml_service.registry.models import (
-    ModelRegistry,
     ModelCard,
+    ModelRegistry,
     SecurityIntegrityError,
 )
-from hazard_ml_service.inference.validator import validate_onnx_model, ModelValidationError
 
 
 @pytest.fixture

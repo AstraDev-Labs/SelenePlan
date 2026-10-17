@@ -1,13 +1,12 @@
 """Component tests for illumination service REST API and authz enforcement."""
 
 import math
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import numpy as np
 import pytest
 from fastapi.testclient import TestClient
-
 from illumination_service.api.app import app
 from illumination_service.api.routes import get_current_principal, store
 from illumination_service.worker.pipeline import IlluminationPipeline

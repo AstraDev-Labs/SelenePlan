@@ -1,20 +1,18 @@
 # report-service
 
-**Port:** 8108
-**Tech:** FastAPI, WeasyPrint, Jinja2
-**Phase:** 5
+**Port:** 8108 | **Tech:** FastAPI, Jinja2, GeoJSON, CSV | **Phase:** 5
 
 ## Purpose
-Generates tamper-evident, publication-quality mission reports in PDF and structured formats, embedding cryptographic signatures, waypoints, and full product lineage (FR-33).
+Generates tamper-evident, publication-quality mission reports in HTML/PDF and structured formats, embedding cryptographic signatures, waypoints, and full product lineage (FR-33).
 
-## Specification
-See [SPEC.md](file:///c:/Users/Tharu/OneDrive/Documents/SelenePlan/services/report-service/SPEC.md) for report templates, asset security, and rendering pipelines.
-
-## Events
-- **Consumes:** `selene-report-requested`
-- **Produces:** `selene-report-completed`, `selene-audit-event`
+## Implemented Features
+1. **Document Builder:** Autoescaping Jinja2 templates preventing HTML and template injection attacks (T18).
+2. **Draft Watermark:** Prominent `DRAFT / NOT SIGNED` watermark rendered for unsigned plan reports.
+3. **Cryptographic Signature Block:** Embeds plan SHA-256 digest, key ID, signature string, and offline verification instructions on approved/signed plans.
+4. **GeoJSON & CSV Waypoint Exports:** Embeds plan hash and signature metadata headers in structured waypoint exports.
+5. **Dataset Licensing Safeguards:** Omits raw points and provides derived summaries for non-redistributable proprietary datasets.
 
 ## Local Development & Testing
 ```bash
-pytest tests/
+pytest services/report-service/tests/ -v
 ```

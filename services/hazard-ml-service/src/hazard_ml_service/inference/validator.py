@@ -2,7 +2,6 @@
 
 import onnx
 
-
 ALLOWED_OPERATORS = {
     "Conv",
     "Relu",
@@ -25,8 +24,6 @@ ALLOWED_OPERATORS = {
 
 class ModelValidationError(Exception):
     """Raised when an ONNX model fails graph validation or uses disallowed operators."""
-
-    pass
 
 
 def validate_onnx_model(onnx_bytes: bytes) -> None:

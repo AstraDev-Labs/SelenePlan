@@ -4,6 +4,7 @@ import { Navbar } from "@/components/Navbar";
 import { PolarMap } from "@/features/map/PolarMap";
 import { LayerControl, LayerState } from "@/features/map/LayerControl";
 import { InspectorPanel, PointInspection } from "@/features/map/InspectorPanel";
+import { PlannerPanel } from "@/features/map/PlannerPanel";
 import { ScenariosView } from "@/features/scenarios/ScenariosView";
 import { DatasetsView } from "@/features/datasets/DatasetsView";
 import { ApprovalsView } from "@/features/approvals/ApprovalsView";
@@ -95,8 +96,9 @@ export const App: React.FC = () => {
             <div className="flex-1 w-full">
               <PolarMap layers={layers} onInspect={setInspection} />
             </div>
-            <div className="flex flex-col gap-6 shrink-0">
+            <div className="flex flex-col gap-6 shrink-0 w-full lg:w-80">
               <LayerControl layers={layers} onChange={setLayers} />
+              <PlannerPanel />
               <InspectorPanel inspection={inspection} />
             </div>
           </div>

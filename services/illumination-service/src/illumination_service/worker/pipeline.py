@@ -5,7 +5,6 @@ from __future__ import annotations
 import uuid
 
 import numpy as np
-
 from illumination_service.events.publisher import IlluminationEventPublisher
 from illumination_service.stats.illum_stats import (
     compute_aggregate_summary,

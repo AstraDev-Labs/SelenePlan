@@ -34,12 +34,12 @@ sys.path.insert(0, str(repo_root / "services" / "ingestion-service" / "src"))
 sys.path.insert(0, str(repo_root / "services" / "provenance-service" / "src"))
 sys.path.insert(0, str(repo_root / "services" / "terrain-service" / "src"))
 
-from ingestion_service.cog.converter import COGConverter  # noqa: E402
-from ingestion_service.validation.raster_validator import validate_raster_header_and_limits  # noqa: E402
-from selene_geo.cog import validate_cog_bytes  # noqa: E402
-from selene_geo.crs import LUNAR_SOUTH_POLE_STEREOGRAPHIC_WKT  # noqa: E402
-from terrain_service.models import get_product_registry  # noqa: E402
-from terrain_service.worker.terrain_pipeline import TerrainPipeline  # noqa: E402
+from ingestion_service.cog.converter import COGConverter
+from ingestion_service.validation.raster_validator import validate_raster_header_and_limits
+from selene_geo.cog import validate_cog_bytes
+from selene_geo.crs import LUNAR_SOUTH_POLE_STEREOGRAPHIC_WKT
+from terrain_service.models import get_product_registry
+from terrain_service.worker.terrain_pipeline import TerrainPipeline
 
 # NASA PDS LOLA South Polar Gridded Data Record URL
 PDS_LOLA_URL = (

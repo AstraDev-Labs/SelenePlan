@@ -1,20 +1,17 @@
 # project-service
 
-**Port:** 8101
-**Tech:** FastAPI, SQLAlchemy 2, Alembic, PostgreSQL, aiokafka
-**Phase:** 1 (core data & sagas), 5 (approval workflows)
+**Port:** 8101 | **Tech:** FastAPI, SQLAlchemy 2, Pydantic v2 | **Phase:** 5
 
 ## Purpose
-Core mission orchestration engine managing organizations, projects, scenarios, rover profiles, pipeline run state machines, plan versions, and multi-signature approval lifecycles (FR-20, FR-30).
+System of record for organizations, projects, AOIs, rover profiles, scenarios, runs, plans, and approvals. Hosts the pipeline orchestrator state machine and four-eyes plan workflow (FR-10, FR-20, FR-30 to FR-33).
 
-## Specification
-See [SPEC.md](file:///c:/Users/Tharu/OneDrive/Documents/SelenePlan/services/project-service/SPEC.md) for data schemas, saga orchestration, and authorization rules.
-
-## Events
-- **Consumes:** `selene-*.completed`, `selene-*.failed`
-- **Produces:** `selene-*.requested`, `selene-plan-state-changed`, `selene-audit-event`
+## Implemented Features
+1. **Pipeline Orchestrator State Machine:** Pure-function run state machine handling parallel steps (`terrain`, `hazard`, `illumination`, `comms`), join barrier, then `plan` step, retry logic (up to 3 attempts), timeouts, cancel handling, and restart idempotency.
+2. **Plan Approval Lifecycle:** Versioned plan state transitions (`draft → in_review → approved → signed`).
+3. **Four-Eyes Policy:** Enforces approver role, required MFA claims, author self-approval denial, two distinct approvers required for `approved`, and rejection reset to `draft`.
+4. **Idempotency & Isolation:** Idempotency-Key header support on run start and approval decisions, cross-project access isolation (403 Forbidden).
 
 ## Local Development & Testing
 ```bash
-pytest tests/
+pytest services/project-service/tests/ -v
 ```

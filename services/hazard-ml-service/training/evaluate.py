@@ -6,6 +6,7 @@ robustness under noise, blur, and no-data stripes.
 
 from dataclasses import dataclass
 from pathlib import Path
+
 import numpy as np
 import onnxruntime as ort
 from scipy.ndimage import gaussian_filter, maximum_filter
@@ -342,10 +343,10 @@ def generate_evaluation_report(
 
 | Perturbation Condition | Parameter | Measured Recall | Relative Retention |
 |---|---|---|---|
-| **Baseline** | Uncorrupted synthetic test set | **{robustness['baseline_recall']:.3f}** | 100.0% |
-| **Sensor Gaussian Noise** | $\\sigma = 0.08$ | **{robustness['noise_sigma_0.08_recall']:.3f}** | {(robustness['noise_sigma_0.08_recall'] / max(1e-6, robustness['baseline_recall']) * 100):.1f}% |
-| **Atmospheric/Optical Blur** | $\\sigma = 1.5\\text{{ px}}$ | **{robustness['blur_sigma_1.5_recall']:.3f}** | {(robustness['blur_sigma_1.5_recall'] / max(1e-6, robustness['baseline_recall']) * 100):.1f}% |
-| **Missing Data / Transmission Stripes** | $2 \\times 12\\text{{ px}}$ dropped rows | **{robustness['nodata_stripes_recall']:.3f}** | {(robustness['nodata_stripes_recall'] / max(1e-6, robustness['baseline_recall']) * 100):.1f}% |
+| **Baseline** | Uncorrupted synthetic test set | **{robustness["baseline_recall"]:.3f}** | 100.0% |
+| **Sensor Gaussian Noise** | $\\sigma = 0.08$ | **{robustness["noise_sigma_0.08_recall"]:.3f}** | {(robustness["noise_sigma_0.08_recall"] / max(1e-6, robustness["baseline_recall"]) * 100):.1f}% |
+| **Atmospheric/Optical Blur** | $\\sigma = 1.5\\text{{ px}}$ | **{robustness["blur_sigma_1.5_recall"]:.3f}** | {(robustness["blur_sigma_1.5_recall"] / max(1e-6, robustness["baseline_recall"]) * 100):.1f}% |
+| **Missing Data / Transmission Stripes** | $2 \\times 12\\text{{ px}}$ dropped rows | **{robustness["nodata_stripes_recall"]:.3f}** | {(robustness["nodata_stripes_recall"] / max(1e-6, robustness["baseline_recall"]) * 100):.1f}% |
 
 ---
 

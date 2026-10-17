@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from illumination_service.storage.zarr_store import ZarrCubeStore
 from illumination_service.worker.pipeline import IlluminationPipeline
 from selene_geo.spice import default_spice_manager
@@ -103,7 +102,7 @@ def test_pipeline_convergence(setup_spice_and_pipeline: IlluminationPipeline) ->
     end = "2026-03-01T12:00:00Z"
 
     # Coarse run: dt = 7200s (2h), bins = 36
-    prod_coarse, meta_coarse = pipeline.run_analysis(
+    _prod_coarse, meta_coarse = pipeline.run_analysis(
         dem=dem,
         cell_size_m=20.0,
         obs_lat_rad=lat_rad,
@@ -119,7 +118,7 @@ def test_pipeline_convergence(setup_spice_and_pipeline: IlluminationPipeline) ->
     )
 
     # Refined run: dt = 3600s (1h, halved), bins = 72 (doubled)
-    prod_fine, meta_fine = pipeline.run_analysis(
+    _prod_fine, meta_fine = pipeline.run_analysis(
         dem=dem,
         cell_size_m=20.0,
         obs_lat_rad=lat_rad,

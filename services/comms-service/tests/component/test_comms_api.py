@@ -1,16 +1,15 @@
 """Component tests for comms-service REST API and authz enforcement."""
 
 import math
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import numpy as np
 import pytest
-from fastapi.testclient import TestClient
-
 from comms_service.api.app import app
 from comms_service.api.routes import get_current_principal, store
 from comms_service.worker.pipeline import CommsPipeline
+from fastapi.testclient import TestClient
 from selene_auth import AuthError, Principal, set_global_jwt_validator
 from selene_geo.spice import default_spice_manager
 

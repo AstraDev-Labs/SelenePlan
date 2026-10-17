@@ -1,19 +1,19 @@
 """Unit tests for model registry, signature calculation, and gate enforcement."""
 
 import pytest
+from hazard_ml_service.registry.gate import (
+    ApprovalGateError,
+    check_two_person_rule,
+    evaluate_metric_gate,
+)
+from hazard_ml_service.registry.models import (
+    ModelCard,
+    ModelRegistry,
+)
 from hazard_ml_service.registry.signature import (
     compute_sha256,
     sign_model_manifest,
     verify_model_signature,
-)
-from hazard_ml_service.registry.gate import (
-    evaluate_metric_gate,
-    check_two_person_rule,
-    ApprovalGateError,
-)
-from hazard_ml_service.registry.models import (
-    ModelRegistry,
-    ModelCard,
 )
 
 

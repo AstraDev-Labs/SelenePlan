@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from comms_service.earth.ephemeris import EarthGeometryEngine
 from comms_service.storage.zarr_store import ZarrCommsStore
 from comms_service.worker.pipeline import CommsPipeline
@@ -112,7 +111,7 @@ def test_libration_check(setup_spice_and_pipeline: CommsPipeline) -> None:
 
     # Independent check against direct SPICE call for step 0
     et0 = str_to_et("2026-03-01T00:00:00Z")
-    pos_m, lt0 = get_body_position_moon_fixed("EARTH", et0)
+    pos_m, _lt0 = get_body_position_moon_fixed("EARTH", et0)
     az0, el0 = compute_local_az_el(pos_m, lat_rad, lon_rad)
 
     assert math.isclose(steps[0].azimuth_rad, az0, abs_tol=1e-6)

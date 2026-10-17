@@ -56,9 +56,13 @@ selene-plan/
 | **identity** | `services/identity` | Port 8080 | ✅ Verified & Tested | Phase 0 |
 | **illumination-service** | `services/illumination-service` | Port 8105 | ✅ Verified & Tested | Phase 2 |
 | **ingestion-service** | `services/ingestion-service` | Port 8102 | ✅ Verified & Tested | Phase 1 |
+| **planner-service** | `services/planner-service` | Port 8107 | ✅ Verified & Tested | Phase 5 |
+| **project-service** | `services/project-service` | Port 8101 | ✅ Verified & Tested | Phase 5 |
 | **provenance-service** | `services/provenance-service` | Port 8111 | ✅ Verified & Tested | Phase 1/5 |
+| **report-service** | `services/report-service` | Port 8108 | ✅ Verified & Tested | Phase 5 |
+| **signing-service** | `services/signing-service` | Port 8110 | ✅ Verified & Tested | Phase 5 |
 | **terrain-service** | `services/terrain-service` | Port 8103 | ✅ Verified & Tested | Phase 1 |
-| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1-4 |
+| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1-5 |
 
 ## Local quick start
 ```bash

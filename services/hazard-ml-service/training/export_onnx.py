@@ -1,9 +1,10 @@
 """Export reproducible ONNX crater detection model with Dual-Head outputs."""
 
 from pathlib import Path
+
 import numpy as np
 import onnx
-from onnx import helper, TensorProto
+from onnx import TensorProto, helper
 
 
 def build_crater_onnx_model(output_path: str | Path, seed: int = 42) -> Path:

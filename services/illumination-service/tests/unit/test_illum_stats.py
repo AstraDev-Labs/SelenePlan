@@ -1,7 +1,6 @@
 """Unit tests for illumination statistical calculations."""
 
 import numpy as np
-
 from illumination_service.stats.illum_stats import (
     compute_aggregate_summary,
     compute_lit_fraction,

@@ -4,8 +4,6 @@
 class ApprovalGateError(Exception):
     """Raised when a model fails metric thresholds or two-person approval rules."""
 
-    pass
-
 
 def evaluate_metric_gate(
     measured_metrics: dict[str, float],

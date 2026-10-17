@@ -1,9 +1,9 @@
 """Component integration tests for hazard-ml-service REST endpoints."""
 
 from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
-
 from hazard_ml_service.api.app import app
 from hazard_ml_service.registry.models import GLOBAL_MODEL_REGISTRY, ModelCard
 

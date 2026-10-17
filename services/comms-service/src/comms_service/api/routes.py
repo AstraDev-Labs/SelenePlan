@@ -6,15 +6,14 @@ import math
 from typing import Any
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
-
 from comms_service.storage.zarr_store import ZarrCommsStore
 from comms_service.windows.extractor import (
     compute_blackout_stats,
     extract_visibility_windows,
 )
 from comms_service.worker.pipeline import CommsPipeline
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from selene_auth import Principal, get_current_principal
 
 router = APIRouter(prefix="/v1")
@@ -110,10 +109,10 @@ async def get_point_visibility_windows(
         row = int(y)
         col = int(x)
     else:
-        minx, miny, maxx, maxy = meta.bounds
+        minx, _miny, _maxx, maxy = meta.bounds
         res = meta.resolution_m
-        col = int(math.floor((x - minx) / res))
-        row = int(math.floor((maxy - y) / res))
+        col = math.floor((x - minx) / res)
+        row = math.floor((maxy - y) / res)
 
     try:
         series = store.read_timeseries(product_id, row, col)

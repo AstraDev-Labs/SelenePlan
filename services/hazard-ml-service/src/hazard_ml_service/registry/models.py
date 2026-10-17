@@ -1,27 +1,25 @@
 """Model registry and secure session loading for hazard-ml-service."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-import onnxruntime as ort
-from pydantic import BaseModel, Field
 
+import onnxruntime as ort
+from hazard_ml_service.events.publisher import create_audit_event
+from hazard_ml_service.registry.gate import (
+    ApprovalGateError,
+    check_two_person_rule,
+    evaluate_metric_gate,
+)
 from hazard_ml_service.registry.signature import (
     compute_sha256,
     sign_model_manifest,
     verify_model_signature,
 )
-from hazard_ml_service.registry.gate import (
-    evaluate_metric_gate,
-    check_two_person_rule,
-    ApprovalGateError,
-)
-from hazard_ml_service.events.publisher import create_audit_event
+from pydantic import BaseModel, Field
 
 
 class SecurityIntegrityError(Exception):
     """Raised when an ONNX model fails integrity, signature, or approval checks."""
-
-    pass
 
 
 class ModelCard(BaseModel):
@@ -80,7 +78,7 @@ class ModelRegistry:
             signature=signature,
             approved=False,
             created_by=created_by,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
             model_card=model_card.model_dump(),
         )
 
@@ -141,7 +139,7 @@ class ModelRegistry:
         # Mark approved
         record.approved = True
         record.approved_by = approver_id
-        record.approved_at = datetime.now(timezone.utc).isoformat()
+        record.approved_at = datetime.now(UTC).isoformat()
 
         audit = create_audit_event(
             action="model.approved",

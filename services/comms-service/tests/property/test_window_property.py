@@ -5,7 +5,6 @@ Acceptance Criterion 3 (comms SPEC.md).
 
 import numpy as np
 import pytest
-
 from comms_service.windows.extractor import extract_visibility_windows
 
 

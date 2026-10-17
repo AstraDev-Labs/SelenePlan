@@ -1,7 +1,7 @@
 """Unit tests for hazard fusion logic, truth tables, and conservative resampling (FR-13)."""
 
 import numpy as np
-from hazard_ml_service.fusion.fuser import fuse_hazards, conservative_max_pool_resample
+from hazard_ml_service.fusion.fuser import conservative_max_pool_resample, fuse_hazards
 
 
 def test_fusion_truth_table() -> None:

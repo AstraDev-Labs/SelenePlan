@@ -5,20 +5,20 @@ from __future__ import annotations
 import base64
 import uuid
 from typing import Any
+
 import numpy as np
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
-
+from hazard_ml_service.events.publisher import create_hazard_completed_event
+from hazard_ml_service.fusion.fuser import fuse_hazards
+from hazard_ml_service.inference.engine import InferenceEngine
+from hazard_ml_service.inference.validator import ModelValidationError, validate_onnx_model
 from hazard_ml_service.registry.models import (
     GLOBAL_MODEL_REGISTRY,
+    ApprovalGateError,
     ModelCard,
     SecurityIntegrityError,
-    ApprovalGateError,
 )
-from hazard_ml_service.inference.validator import validate_onnx_model, ModelValidationError
-from hazard_ml_service.inference.engine import InferenceEngine
-from hazard_ml_service.fusion.fuser import fuse_hazards
-from hazard_ml_service.events.publisher import create_hazard_completed_event
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/v1", tags=["Hazard ML & Registry"])
 

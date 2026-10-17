@@ -4,7 +4,6 @@ import hashlib
 import hmac
 import os
 
-
 DEFAULT_REGISTRY_KEY = os.getenv(
     "SELENE_MODEL_SIGNING_KEY", "vault-transit-ml-model-signing-key-mock-2026"
 )
@@ -22,7 +21,7 @@ def sign_model_manifest(
     key: str = DEFAULT_REGISTRY_KEY,
 ) -> str:
     """Produce cryptographic signature over model manifest parameters."""
-    canonical_payload = f"{model_id}:{version}:{sha256_hash}".encode("utf-8")
+    canonical_payload = f"{model_id}:{version}:{sha256_hash}".encode()
     sig = hmac.new(key.encode("utf-8"), canonical_payload, hashlib.sha256).hexdigest()
     return f"sig:v1:{sig}"
 

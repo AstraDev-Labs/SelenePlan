@@ -131,7 +131,7 @@ def test_spice_known_answer_south_pole(spice_kernels_loaded: bool) -> None:
     lat_rad = math.radians(-90.0)
     lon_rad = 0.0
 
-    ets, azs, els = compute_sun_trajectory(
+    ets, _azs, els = compute_sun_trajectory(
         start_iso="2026-03-01T00:00:00Z",
         end_iso="2026-03-01T12:00:00Z",
         step_seconds=3600.0 * 2.0,  # every 2 hours

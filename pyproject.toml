@@ -6,6 +6,7 @@ target-version = "py312"
 ignore = [
     "B008",    # FastAPI Depends in function defaults
     "EXE002",  # Executable without shebang (cross-platform Windows NTFS mount artifact)
+    "E402",    # Module level import not at top of file (sys.path manipulation for standalone tools/scripts)
 ]
 
 [tool.mypy]
@@ -23,6 +24,13 @@ mypy_path = [
     "services/ingestion-service/src",
     "services/provenance-service/src",
     "services/terrain-service/src",
+    "services/illumination-service/src",
+    "services/comms-service/src",
+    "services/hazard-ml-service/src",
+    "services/planner-service/src",
+    "services/project-service/src",
+    "services/signing-service/src",
+    "services/report-service/src",
 ]
 
 [[tool.mypy.overrides]]
@@ -48,6 +56,13 @@ pythonpath = [
     "services/ingestion-service/src",
     "services/provenance-service/src",
     "services/terrain-service/src",
+    "services/illumination-service/src",
+    "services/comms-service/src",
+    "services/hazard-ml-service/src",
+    "services/planner-service/src",
+    "services/project-service/src",
+    "services/signing-service/src",
+    "services/report-service/src",
 ]
 markers = [
     "integration: marks tests as integration tests (requires live external services)",

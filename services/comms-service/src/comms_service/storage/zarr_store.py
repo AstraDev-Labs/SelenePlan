@@ -97,7 +97,7 @@ class ZarrCommsStore:
         root = zarr.open_group(str(path), mode="r")
         cube = root["cube"]
         if time_index < 0 or time_index >= cube.shape[0]:
-            raise IndexError(f"Time index {time_index} out of range [0, {cube.shape[0]-1}]")
+            raise IndexError(f"Time index {time_index} out of range [0, {cube.shape[0] - 1}]")
         return np.asarray(cube[time_index])
 
     def read_timeseries(self, product_id: str, row: int, col: int) -> np.ndarray:

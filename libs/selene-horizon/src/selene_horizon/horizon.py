@@ -11,7 +11,6 @@ import math
 
 import numpy as np
 from numba import njit, prange
-
 from selene_geo.constants import MOON_RADIUS_M
 
 
@@ -24,13 +23,11 @@ def _bilinear_interpolate(
     cols: int,
 ) -> float:
     """Sample DEM with bilinear interpolation and clamping."""
-    r0 = int(math.floor(r))
-    c0 = int(math.floor(c))
+    r0 = math.floor(r)
+    c0 = math.floor(c)
 
-    if r0 < 0:
-        r0 = 0
-    if c0 < 0:
-        c0 = 0
+    r0 = max(r0, 0)
+    c0 = max(c0, 0)
     r1 = r0 + 1
     c1 = c0 + 1
     if r1 >= rows:
@@ -106,8 +103,7 @@ def _compute_horizon_numba(
                     effective_diff = (z_sample - curv_drop) - z0
 
                     tan_theta = effective_diff / dist_m
-                    if tan_theta > max_tan_theta:
-                        max_tan_theta = tan_theta
+                    max_tan_theta = max(max_tan_theta, tan_theta)
 
                 # Angle in radians, bounded below by zero (local horizontal)
                 if max_tan_theta > 0.0:
@@ -128,8 +124,7 @@ def compute_padding_margin_m(max_relief_m: float, min_elevation_deg: float) -> f
     Returns:
         Halo reach distance in metres: max_relief / tan(min_elevation).
     """
-    if min_elevation_deg <= 0.1:
-        min_elevation_deg = 0.1
+    min_elevation_deg = max(0.1, min_elevation_deg)
     tan_el = math.tan(math.radians(min_elevation_deg))
     return max_relief_m / tan_el
 
@@ -163,7 +158,7 @@ def compute_horizon_profile(
         raise ValueError("cell_size_m must be positive")
 
     azimuths_rad = np.linspace(0.0, 2.0 * math.pi, azimuth_bins, endpoint=False, dtype=np.float64)
-    max_steps = int(math.ceil(max_ray_dist_m / (cell_size_m * step_pixel)))
+    max_steps = math.ceil(max_ray_dist_m / (cell_size_m * step_pixel))
 
     # Ensure contiguous float64 array for Numba
     dem_c = np.ascontiguousarray(dem, dtype=np.float64)
@@ -204,7 +199,7 @@ def evaluate_lit_mask(
     # Nearest or interpolated azimuth bin
     num_bins = len(azimuths_rad)
     norm_az = sun_az_rad % (2.0 * math.pi)
-    bin_idx = int(round(norm_az / (2.0 * math.pi) * num_bins)) % num_bins
+    bin_idx = round(norm_az / (2.0 * math.pi) * num_bins) % num_bins
 
     # Lit if Sun elevation exceeds terrain horizon angle
     horizon_slice = horizon[:, :, bin_idx]

@@ -7,7 +7,6 @@ import uuid
 from typing import Any
 
 import numpy as np
-
 from comms_service.earth.ephemeris import EarthGeometryEngine
 from comms_service.events.publisher import CommsEventPublisher
 from comms_service.storage.zarr_store import CommsProductMetadata, ZarrCommsStore
@@ -168,7 +167,7 @@ class CommsPipeline:
             List of waypoints augmented with 'is_visible' and 'earth_line_of_sight'.
         """
         meta = self.cube_store.load_metadata(product_id)
-        minx, miny, maxx, maxy = meta.bounds
+        minx, _miny, _maxx, maxy = meta.bounds
         res = meta.resolution_m
         t_max = meta.shape[0] - 1
 
@@ -180,8 +179,8 @@ class CommsPipeline:
             t_idx = int(wp.get("time_index", 0))
             t_idx_clamped = max(0, min(t_max, t_idx))
 
-            col = int(math.floor((x_m - minx) / res))
-            row = int(math.floor((maxy - y_m) / res))
+            col = math.floor((x_m - minx) / res)
+            row = math.floor((maxy - y_m) / res)
 
             col_clamped = max(0, min(meta.shape[2] - 1, col))
             row_clamped = max(0, min(meta.shape[1] - 1, row))

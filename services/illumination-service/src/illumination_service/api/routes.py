@@ -8,10 +8,9 @@ from typing import Any
 
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from pydantic import BaseModel, Field
-
 from illumination_service.storage.slice_cache import default_slice_cache
 from illumination_service.storage.zarr_store import ZarrCubeStore
+from pydantic import BaseModel, Field
 from selene_auth import Principal, get_current_principal
 
 router = APIRouter(prefix="/v1")
@@ -122,10 +121,10 @@ async def get_point_timeseries(
         col = int(x)
     else:
         # Map from projected bounds [minx, miny, maxx, maxy] to row/col
-        minx, miny, maxx, maxy = meta.bounds
+        minx, _miny, _maxx, maxy = meta.bounds
         res = meta.resolution_m
-        col = int(math.floor((x - minx) / res))
-        row = int(math.floor((maxy - y) / res))
+        col = math.floor((x - minx) / res)
+        row = math.floor((maxy - y) / res)
 
     try:
         series = store.read_timeseries(product_id, row, col)

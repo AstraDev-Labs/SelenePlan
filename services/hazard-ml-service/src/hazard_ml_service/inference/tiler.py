@@ -1,6 +1,7 @@
 """Image tiling and spatial grid extraction for inference worker."""
 
 from dataclasses import dataclass
+
 import numpy as np
 
 

@@ -3,12 +3,12 @@
 import time
 from dataclasses import dataclass
 from typing import Any
+
 import numpy as np
 import onnxruntime as ort
-from scipy.ndimage import maximum_filter
-
-from hazard_ml_service.inference.tiler import generate_overlapping_tiles, stitch_hazard_heatmap
 from hazard_ml_service.inference.nms import non_maximum_suppression_circles
+from hazard_ml_service.inference.tiler import generate_overlapping_tiles, stitch_hazard_heatmap
+from scipy.ndimage import maximum_filter
 
 
 @dataclass

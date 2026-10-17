@@ -5,7 +5,6 @@ Acceptance Criterion 6 (SPEC.md).
 
 import numpy as np
 import pytest
-
 from illumination_service.stats.illum_stats import compute_longest_dark_s
 
 
@@ -16,8 +15,7 @@ def brute_force_longest_dark_1d(series: list[bool] | np.ndarray, dt_s: float) ->
     for is_lit in series:
         if not is_lit:  # dark
             current_streak += 1
-            if current_streak > max_streak:
-                max_streak = current_streak
+            max_streak = max(max_streak, current_streak)
         else:
             current_streak = 0
     return max_streak * dt_s
