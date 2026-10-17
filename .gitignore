@@ -1,0 +1,46 @@
+# Secrets and local env
+.env
+infra/.env
+*.pem
+*.key
+*.p12
+secrets/
+
+# Data and models (large, license-restricted, or reproducible)
+data/
+*.tif
+*.tiff
+*.img
+*.lbl
+*.onnx
+*.pt
+*.pth
+*.zarr/
+!tests/fixtures/**/*.tif
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+services/web/dist/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Generated
+sbom.spdx.json

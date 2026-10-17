@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://selene.local/schemas/envelope.v1.json",
+  "title": "SelenePlan Event Envelope v1",
+  "type": "object",
+  "required": ["event_id", "type", "source", "time", "org_id", "project_id", "trace_id", "schema_version", "data"],
+  "additionalProperties": false,
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "type": {
+      "type": "string",
+      "pattern": "^selene\\.[a-z0-9.]+\\.v[0-9]+$",
+      "description": "Example: selene.terrain.analysis.completed.v1"
+    },
+    "source": { "type": "string", "minLength": 1, "description": "Producing service name" },
+    "time": { "type": "string", "format": "date-time", "description": "UTC, RFC 3339" },
+    "org_id": { "type": "string", "format": "uuid" },
+    "project_id": { "type": "string", "format": "uuid" },
+    "run_id": { "type": ["string", "null"], "format": "uuid" },
+    "subject": { "type": ["string", "null"], "description": "Resource reference such as product:<uuid>" },
+    "trace_id": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "data": { "type": "object" }
+  }
+}

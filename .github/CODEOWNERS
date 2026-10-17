@@ -1,0 +1,11 @@
+# Security- and integrity-critical paths require owner review (replace with your GitHub handle/team).
+# AI agent PRs must never be auto-merged; a human reviews these paths.
+docs/03-security-threat-model.md   @OWNER
+services/signing-service/          @OWNER
+services/audit-service/            @OWNER
+services/provenance-service/       @OWNER
+services/identity/                 @OWNER
+infra/                             @OWNER
+policies/                          @OWNER
+libs/selene-auth/                  @OWNER
+.github/                           @OWNER

@@ -1,0 +1,26 @@
+# Starter scrape config. Add each service as it is implemented (Phase 0 onward).
+# Services expose /metrics on their own port (see docs/02-architecture.md).
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: selene-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - project-service:8101
+          - ingestion-service:8102
+          - terrain-service:8103
+          - hazard-ml-service:8104
+          - illumination-service:8105
+          - comms-service:8106
+          - planner-service:8107
+          - report-service:8108
+          - audit-service:8109
+          - signing-service:8110
+          - provenance-service:8111

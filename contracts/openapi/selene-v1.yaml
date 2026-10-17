@@ -1,0 +1,325 @@
+openapi: 3.1.0
+info:
+  title: SelenePlan API
+  version: 1.0.0
+  description: >
+    Contract skeleton for the public API behind the gateway. Each service must
+    implement its slice and keep its generated OpenAPI consistent with this file.
+    Add detail as endpoints are implemented; keep changes additive within /v1.
+servers:
+  - url: http://localhost:8080
+    description: Local gateway
+security:
+  - bearerAuth: []
+tags:
+  - name: projects
+  - name: runs
+  - name: datasets
+  - name: products
+  - name: plans
+  - name: planner
+  - name: integrity
+  - name: reports
+paths:
+  /v1/projects:
+    post:
+      tags: [projects]
+      summary: Create a project
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectCreate' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /v1/projects/{projectId}:
+    get:
+      tags: [projects]
+      summary: Get a project
+      operationId: getProject
+      parameters:
+        - { $ref: '#/components/parameters/ProjectId' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /v1/scenarios/{scenarioId}/runs:
+    post:
+      tags: [runs]
+      summary: Start a pipeline run
+      operationId: startRun
+      parameters:
+        - { name: scenarioId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { $ref: '#/components/parameters/IdempotencyKey' }
+      responses:
+        '202':
+          description: Accepted
+          headers:
+            Location: { schema: { type: string } }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/runs/{runId}:
+    get:
+      tags: [runs]
+      summary: Get run state and steps
+      operationId: getRun
+      parameters:
+        - { name: runId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Run' }
+  /v1/datasets:
+    post:
+      tags: [datasets]
+      summary: Register or ingest a dataset
+      operationId: registerDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatasetCreate' }
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Dataset' }
+  /v1/products/{productId}/slice:
+    get:
+      tags: [products]
+      summary: Time slice of an illumination or visibility product
+      operationId: getProductSlice
+      parameters:
+        - { name: productId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: t, in: query, required: true, schema: { type: string, format: date-time } }
+      responses:
+        '200':
+          description: Tile template or COG window reference
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SliceRef' }
+  /v1/plans/{planId}/versions/{version}/decision:
+    post:
+      tags: [plans]
+      summary: Approve or reject a plan version
+      operationId: decidePlan
+      parameters:
+        - { name: planId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: version, in: path, required: true, schema: { type: integer, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Decision' }
+      responses:
+        '200':
+          description: Decision recorded
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /v1/planner/routes/{routeId}:
+    get:
+      tags: [planner]
+      summary: Route with waypoints and explanation
+      operationId: getRoute
+      parameters:
+        - { name: routeId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Route' }
+  /v1/verify:
+    post:
+      tags: [integrity]
+      summary: Verify a signed plan bundle
+      operationId: verifyBundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SignedBundle' }
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyResult' }
+  /v1/audit/integrity:
+    get:
+      tags: [integrity]
+      summary: Verify the audit hash chain
+      operationId: verifyAuditChain
+      responses:
+        '200':
+          description: Chain status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChainStatus' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema: { type: string, maxLength: 128 }
+  responses:
+    Unauthorized:
+      description: Missing or invalid credentials
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Not allowed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: State conflict
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, trace_id]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            trace_id: { type: string }
+            details: { type: array, items: { type: object } }
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: string, maxLength: 2000 }
+    Project:
+      allOf:
+        - $ref: '#/components/schemas/ProjectCreate'
+        - type: object
+          required: [id, org_id, created_at]
+          properties:
+            id: { type: string, format: uuid }
+            org_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+    Run:
+      type: object
+      required: [id, scenario_id, state]
+      properties:
+        id: { type: string, format: uuid }
+        scenario_id: { type: string, format: uuid }
+        state: { type: string, enum: [queued, running, succeeded, failed, canceled] }
+        steps:
+          type: array
+          items:
+            type: object
+            properties:
+              step: { type: string, enum: [terrain, hazard, illumination, comms, plan] }
+              state: { type: string }
+              product_id: { type: [string, 'null'], format: uuid }
+        failure_reason: { type: [string, 'null'] }
+    DatasetCreate:
+      type: object
+      required: [name, kind, source, license]
+      properties:
+        name: { type: string }
+        kind: { type: string, enum: [dem, orthoimage, ephemeris] }
+        source: { type: string, description: 'Allowlisted source identifier, not an arbitrary URL' }
+        license: { type: string }
+        expected_sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+    Dataset:
+      type: object
+      required: [id, status]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [queued, ingesting, registered, failed] }
+    SliceRef:
+      type: object
+      required: [product_id, t]
+      properties:
+        product_id: { type: string, format: uuid }
+        t: { type: string, format: date-time }
+        tile_url_template: { type: string }
+        cog_url: { type: string }
+    Decision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        comment: { type: string, maxLength: 2000 }
+    Route:
+      type: object
+      required: [id, waypoints]
+      properties:
+        id: { type: string, format: uuid }
+        waypoints:
+          type: array
+          items:
+            type: object
+            required: [t, x_m, y_m]
+            properties:
+              t: { type: string, format: date-time }
+              x_m: { type: number }
+              y_m: { type: number }
+              sun_elev_deg: { type: number }
+              earth_visible: { type: boolean }
+              battery_wh: { type: number }
+        metrics: { type: object }
+        explanation: { type: object }
+    SignedBundle:
+      type: object
+      required: [plan, signature]
+      properties:
+        plan: { type: object }
+        signature: { type: object }
+    VerifyResult:
+      type: object
+      required: [valid]
+      properties:
+        valid: { type: boolean }
+        reason: { type: string }
+        key_id: { type: string }
+        payload_sha256: { type: string }
+    ChainStatus:
+      type: object
+      required: [ok]
+      properties:
+        ok: { type: boolean }
+        checked_from_seq: { type: integer }
+        checked_to_seq: { type: integer }
+        first_break_seq: { type: [integer, 'null'] }
