@@ -82,3 +82,51 @@ async def test_opa_client_fails_closed_on_timeout() -> None:
         res = await client.evaluate("selene.project.access", {"user": "analyst"})
         assert res.allow is False
         assert "timeout" in str(res.reason).lower()
+
+
+@pytest.mark.asyncio
+async def test_opa_client_fails_closed_on_malformed_json() -> None:
+    client = OPAClient(opa_url="http://mock-opa:8181")
+
+    from unittest.mock import MagicMock, patch
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.side_effect = ValueError("Invalid JSON response from server")
+
+    with patch("httpx.AsyncClient.post", return_value=mock_resp):
+        res = await client.evaluate("selene.project.access", {"user": "analyst"})
+        assert res.allow is False
+        assert "evaluation failed" in str(res.reason).lower()
+
+
+@pytest.mark.asyncio
+async def test_opa_client_fails_closed_on_unexpected_result_shape() -> None:
+    client = OPAClient(opa_url="http://mock-opa:8181")
+
+    from unittest.mock import MagicMock, patch
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"result": ["list", "of", "items"]}
+
+    with patch("httpx.AsyncClient.post", return_value=mock_resp):
+        res = await client.evaluate("selene.project.access", {"user": "analyst"})
+        assert res.allow is False
+        assert "unexpected opa result shape" in str(res.reason).lower()
+
+
+@pytest.mark.asyncio
+async def test_opa_client_denial_dict() -> None:
+    client = OPAClient(opa_url="http://mock-opa:8181")
+
+    from unittest.mock import MagicMock, patch
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"result": {"allow": False, "reason": "Insufficient clearance"}}
+
+    with patch("httpx.AsyncClient.post", return_value=mock_resp):
+        res = await client.evaluate("selene.project.access", {"user": "analyst"})
+        assert res.allow is False
+        assert res.reason == "Insufficient clearance"

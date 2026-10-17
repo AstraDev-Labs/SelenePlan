@@ -95,12 +95,12 @@ class JWKSCache:
                 parsed_key = jwt.algorithms.RSAAlgorithm.from_jwk(k)
                 if isinstance(parsed_key, rsa.RSAPublicKey):
                     pub_key = parsed_key
-            except (ValueError, TypeError, KeyError):
+            except (ValueError, TypeError, KeyError, jwt.PyJWTError):
                 try:
                     parsed_ec = jwt.algorithms.ECAlgorithm.from_jwk(k)
                     if isinstance(parsed_ec, ec.EllipticCurvePublicKey):
                         pub_key = parsed_ec
-                except (ValueError, TypeError, KeyError):
+                except (ValueError, TypeError, KeyError, jwt.PyJWTError):
                     continue
             if pub_key is not None:
                 self._keys[kid] = pub_key

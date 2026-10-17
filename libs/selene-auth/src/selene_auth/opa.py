@@ -62,8 +62,16 @@ class OPAClient:
                 reason = raw_result.get("reason")
                 return OPAResult(allow=allow, reason=reason, raw_result=raw_result)
             else:
-                allow = bool(raw_result)
-                return OPAResult(allow=allow, raw_result=raw_result)
+                logger.warning(
+                    "OPA rule '%s' returned unexpected result shape '%s' (failing closed)",
+                    policy_path,
+                    type(raw_result).__name__,
+                )
+                return OPAResult(
+                    allow=False,
+                    reason=f"Unexpected OPA result shape: {type(raw_result).__name__}",
+                    raw_result=raw_result,
+                )
 
         except httpx.TimeoutException as exc:
             logger.error("OPA evaluation timed out against %s: %s", endpoint, exc)

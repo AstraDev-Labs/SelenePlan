@@ -31,3 +31,18 @@ def test_get_current_trace_id_active() -> None:
         trace_id = get_current_trace_id()
         assert trace_id is not None
         assert len(trace_id) == 32
+
+
+def test_init_tracing_with_otlp_endpoint() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from opentelemetry.sdk.trace import TracerProvider
+
+    mock_exporter = MagicMock()
+    with patch(
+        "selene_observability.tracing.OTLPSpanExporter", return_value=mock_exporter
+    ) as mock_cls:
+        provider = init_tracing("test-service", otlp_endpoint="http://otel-collector:4317")
+        assert provider is not None
+        assert isinstance(provider, TracerProvider)
+        mock_cls.assert_called_once_with(endpoint="http://otel-collector:4317")

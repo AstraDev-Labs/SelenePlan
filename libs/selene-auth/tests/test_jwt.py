@@ -393,3 +393,164 @@ def test_principal_from_claims_variations() -> None:
     assert "auditor" in p.roles
     assert p.mfa_verified is True
     assert p.email == "user@selene.local"
+
+
+def test_principal_from_claims_mfa_absent_defaults_false() -> None:
+    claims = {
+        "sub": "user-without-mfa",
+        "roles": ["analyst"],
+    }
+    p = Principal.from_claims(claims)
+    assert p.sub == "user-without-mfa"
+    assert p.mfa_verified is False
+
+
+def test_malformed_token_header_rejected(jwt_validator: JWTValidator) -> None:
+    with pytest.raises(AuthError) as exc:
+        jwt_validator.verify_token("not-a-valid.jwt-token.at-all")
+    assert exc.value.code == "malformed_token"
+
+
+def test_token_missing_kid_rejected(
+    jwt_validator: JWTValidator,
+    rsa_keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+) -> None:
+    now = datetime.now(UTC)
+    payload = {
+        "sub": "user-1",
+        "iss": "https://auth.selene.local/realms/selene",
+        "aud": "selene-api",
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+    }
+    # Token without 'kid' in header
+    token = jwt.encode(payload, rsa_keypair[0], algorithm="RS256", headers={})
+
+    with pytest.raises(AuthError) as exc:
+        jwt_validator.verify_token(token)
+    assert exc.value.code == "missing_kid"
+
+
+def test_key_type_alg_mismatch_rs256_with_ec_key(
+    rsa_keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+    ec_keypair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey],
+) -> None:
+    # Validator cache where kid is mapped to an EC public key
+    cache = JWKSCache(preloaded_keys={"mixed-key": ec_keypair[1]})
+    validator = JWTValidator(
+        jwks_cache=cache,
+        expected_issuer="https://auth.selene.local/realms/selene",
+        expected_audience="selene-api",
+    )
+    now = datetime.now(UTC)
+    payload = {
+        "sub": "user-1",
+        "iss": "https://auth.selene.local/realms/selene",
+        "aud": "selene-api",
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+    }
+    token = jwt.encode(payload, rsa_keypair[0], algorithm="RS256", headers={"kid": "mixed-key"})
+
+    with pytest.raises(AuthError) as exc:
+        validator.verify_token(token)
+    assert exc.value.code == "key_type_mismatch"
+    assert "RS256 requires RSA public key" in exc.value.message
+
+
+def test_token_invalid_issuer_rejected(
+    jwt_validator: JWTValidator,
+    rsa_keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+) -> None:
+    now = datetime.now(UTC)
+    payload = {
+        "sub": "user-1",
+        "iss": "https://evil.attacker.org/realms/evil",
+        "aud": "selene-api",
+        "exp": int((now + timedelta(minutes=5)).timestamp()),
+    }
+    token = jwt.encode(payload, rsa_keypair[0], algorithm="RS256", headers={"kid": "rsa-key-1"})
+
+    with pytest.raises(AuthError) as exc:
+        jwt_validator.verify_token(token)
+    assert exc.value.code == "invalid_issuer"
+
+
+def test_generic_invalid_token_rejected(
+    jwt_validator: JWTValidator,
+    rsa_keypair: tuple[rsa.RSAPrivateKey, rsa.RSAPublicKey],
+) -> None:
+    import base64
+
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    # Valid base64 header
+    header_b64 = (
+        base64.urlsafe_b64encode(b'{"alg":"RS256","kid":"rsa-key-1"}').rstrip(b"=").decode()
+    )
+    # Valid base64, but invalid JSON content
+    payload_b64 = base64.urlsafe_b64encode(b"not valid json {").rstrip(b"=").decode()
+    signing_input = f"{header_b64}.{payload_b64}".encode()
+    sig = rsa_keypair[0].sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+    sig_b64 = base64.urlsafe_b64encode(sig).rstrip(b"=").decode()
+    bad_token = f"{header_b64}.{payload_b64}.{sig_b64}"
+
+    with pytest.raises(AuthError) as exc:
+        jwt_validator.verify_token(bad_token)
+    assert exc.value.code == "invalid_token"
+
+
+def test_jwks_cache_remote_fetch_ec_and_unsupported_keys(
+    ec_keypair: tuple[ec.EllipticCurvePrivateKey, ec.EllipticCurvePublicKey],
+) -> None:
+    from unittest.mock import MagicMock, patch
+
+    ec_jwk = jwt.algorithms.ECAlgorithm.to_jwk(ec_keypair[1], as_dict=True)
+    ec_jwk["kid"] = "remote-ec-kid"
+
+    cache = JWKSCache(
+        jwks_url="https://auth.selene.local/protocol/openid-connect/certs",
+        min_refetch_interval_s=0.0,
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "keys": [
+            ec_jwk,
+            {"kty": "RSA"},  # Missing kid -> continue
+            {"kid": "unsupported-oct", "kty": "oct", "k": "c2VjcmV0"},  # Unsupported -> continue
+        ]
+    }
+
+    with patch("httpx.Client.get", return_value=mock_resp):
+        key = cache.get_key("remote-ec-kid")
+        assert key is not None
+        assert isinstance(key, ec.EllipticCurvePublicKey)
+
+
+def test_jwks_cache_add_key_and_no_url() -> None:
+    cache = JWKSCache()
+    cache.add_key("custom-kid", "dummy-key")
+    assert cache.get_key("custom-kid") == "dummy-key"
+
+    # refresh with no url returns None
+    assert cache.refresh() is None
+
+
+def test_jwks_cache_unknown_kid_after_refresh() -> None:
+    from unittest.mock import MagicMock, patch
+
+    cache = JWKSCache(
+        jwks_url="https://auth.selene.local/protocol/openid-connect/certs",
+        min_refetch_interval_s=0.0,
+    )
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"keys": []}
+
+    with patch("httpx.Client.get", return_value=mock_resp):
+        with pytest.raises(AuthError) as exc:
+            cache.get_key("missing-kid-after-refresh")
+        assert exc.value.code == "unknown_kid"
+        assert "after JWKS refresh" in exc.value.message

@@ -82,10 +82,12 @@ async def test_redis_dedupe_store_calls_nx() -> None:
     mock_redis.set.return_value = True
 
     store = RedisDedupeStore(mock_redis)
-    is_new = await store.mark_seen("test-uuid-2", ttl_seconds=3600)
+    is_new = await store.claim("test-uuid-2", lock_ttl_seconds=3600)
 
     assert is_new is True
-    mock_redis.set.assert_awaited_once_with("selene:dedupe:test-uuid-2", "1", nx=True, ex=3600)
+    mock_redis.set.assert_awaited_once_with(
+        "selene:dedupe:test-uuid-2", "in_progress", nx=True, ex=3600
+    )
 
 
 @pytest.mark.asyncio
@@ -201,3 +203,79 @@ async def test_consumer_handles_invalid_envelope_to_dlq() -> None:
     assert len(dlq.published) == 1
     assert dlq.published[0][0] == "selene-test-dlq"
     assert commit_mock.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_consumer_simulated_crash_mid_handler_allows_redelivery() -> None:
+    """Simulates a hard crash mid-handler where finalize is never reached.
+
+    The short lease lock_ttl_seconds prevents silent message loss:
+    1. During the lease window, other workers see it as in-progress (deduplicated).
+    2. After the lease window expires (crashed worker is dead), a redelivery
+       successfully re-claims and processes the event.
+    """
+    import time
+
+    dedupe = InMemoryDedupeStore()
+    commit_mock = AsyncMock()
+    crash_event_id = "44444444-4444-4444-4444-444444444444"
+    payload = create_sample_payload(crash_event_id)
+
+    # Worker 1: claims the lease but crashes hard mid-handler
+    await dedupe.claim(crash_event_id, lock_ttl_seconds=1)
+
+    # Concurrently (before lease expires), another worker tries to claim -> rejected
+    concurrent_claim = await dedupe.claim(crash_event_id, lock_ttl_seconds=1)
+    assert concurrent_claim is False
+
+    # Simulate time passing past the crash lock TTL (1 second)
+    # Manually expire the lease in the store to simulate elapsed time without long sleep
+    dedupe._states[crash_event_id] = ("in_progress", time.time() - 1.0)
+
+    # Worker 2: Kafka redelivers the uncommitted event after crash timeout
+    consumer = DummyConsumer(dedupe_store=dedupe)
+    result = await consumer.consume_record(
+        topic="selene-terrain-analysis-requested",
+        raw_payload=payload,
+        commit_fn=commit_mock,
+    )
+
+    # Redelivery succeeded
+    assert result.status == "processed"
+    assert result.event_id == crash_event_id
+    assert crash_event_id in consumer.processed_events
+    assert commit_mock.await_count == 1
+
+    # Once finalized, subsequent duplicate attempts are permanently rejected
+    duplicate_claim = await dedupe.claim(crash_event_id, lock_ttl_seconds=60)
+    assert duplicate_claim is False
+
+
+@pytest.mark.asyncio
+async def test_dedupe_store_release_on_handler_crash() -> None:
+    dedupe = InMemoryDedupeStore()
+    await dedupe.claim("evt-123", lock_ttl_seconds=60)
+    assert await dedupe.claim("evt-123") is False
+
+    # Release on explicit failure
+    await dedupe.release("evt-123")
+    assert await dedupe.claim("evt-123") is True
+
+
+@pytest.mark.asyncio
+async def test_redis_dedupe_store_claim_finalize_release() -> None:
+    redis_mock = AsyncMock()
+    store = RedisDedupeStore(redis_client=redis_mock, prefix="test:dedupe:")
+
+    # Claim
+    redis_mock.set.return_value = True
+    assert await store.claim("evt-1", lock_ttl_seconds=30) is True
+    redis_mock.set.assert_called_with("test:dedupe:evt-1", "in_progress", nx=True, ex=30)
+
+    # Finalize
+    await store.finalize("evt-1", completed_ttl_seconds=3600)
+    redis_mock.set.assert_called_with("test:dedupe:evt-1", "completed", ex=3600)
+
+    # Release
+    await store.release("evt-1")
+    redis_mock.delete.assert_called_with("test:dedupe:evt-1")

@@ -67,10 +67,6 @@ def require_roles(*allowed_roles: str) -> Callable[[Principal], Principal]:
     """Dependency factory checking that the authenticated principal holds at least one allowed role."""
 
     def role_checker(principal: Principal = Depends(get_current_principal)) -> Principal:
-        # Admin role implicitly satisfies role checks
-        if "admin" in principal.roles:
-            return principal
-
         if not any(role in principal.roles for role in allowed_roles):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

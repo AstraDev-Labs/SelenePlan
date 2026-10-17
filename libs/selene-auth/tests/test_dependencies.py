@@ -91,10 +91,10 @@ async def test_require_roles_enforcement(dummy_validator: MagicMock) -> None:
         res1 = await client.get("/analyst-only", headers={"Authorization": "Bearer t1"})
         assert res1.status_code == 200
 
-        # 2. Admin role satisfies check
+        # 2. Admin role does NOT satisfy analyst/operator check -> 403 Forbidden
         dummy_validator.verify_token.return_value = Principal(sub="u2", roles=["admin"])
         res2 = await client.get("/analyst-only", headers={"Authorization": "Bearer t2"})
-        assert res2.status_code == 200
+        assert res2.status_code == 403
 
         # 3. Missing role -> 403 Forbidden
         dummy_validator.verify_token.return_value = Principal(sub="u3", roles=["auditor"])
@@ -102,6 +102,29 @@ async def test_require_roles_enforcement(dummy_validator: MagicMock) -> None:
         assert res3.status_code == 403
         data = res3.json()
         assert data["detail"]["error"]["code"] == "forbidden"
+
+
+@pytest.mark.asyncio
+async def test_admin_only_principal_gets_403_on_approver_only_endpoint(
+    dummy_validator: MagicMock,
+) -> None:
+    app = FastAPI()
+
+    @app.get("/approver-only")
+    def approver_endpoint(
+        p: Principal = Depends(require_roles("approver")),
+    ) -> dict[str, str]:
+        return {"status": "approved"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Admin does NOT satisfy approver role check
+        dummy_validator.verify_token.return_value = Principal(sub="admin-user", roles=["admin"])
+        res = await client.get("/approver-only", headers={"Authorization": "Bearer admin.token"})
+        assert res.status_code == 403
+        data = res.json()
+        assert data["detail"]["error"]["code"] == "forbidden"
+        assert "Requires one of roles" in data["detail"]["error"]["message"]
 
 
 @pytest.mark.asyncio
