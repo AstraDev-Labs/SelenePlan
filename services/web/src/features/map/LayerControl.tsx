@@ -1,5 +1,5 @@
 import React from "react";
-import { Eye, EyeOff, Layers, Sliders } from "lucide-react";
+import { AlertTriangle, Cpu, Eye, EyeOff, Layers, Sliders } from "lucide-react";
 
 export type Colormap = "viridis" | "magma" | "terrain" | "hazard";
 
@@ -12,6 +12,9 @@ export interface LayerState {
   showIllumination: boolean;
   showPSR: boolean;
   showEarthVisibility: boolean;
+  showMLHazard: boolean;
+  showFusedHazard: boolean;
+  mlConfidenceThreshold: number;
   colormap: Colormap;
   maxSlopeLimit: number;
 }
@@ -41,6 +44,36 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
 
       {/* Layer Toggles */}
       <div className="flex flex-col gap-2">
+        <button
+          onClick={() => toggle("showFusedHazard")}
+          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+            layers.showFusedHazard ? "bg-amber-500/20 border border-amber-500/50 text-amber-200" : "bg-white/5 text-gray-400"
+          }`}
+        >
+          <span className="font-semibold">Fused Hazard Map (FR-13)</span>
+          {layers.showFusedHazard ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+        </button>
+
+        <button
+          onClick={() => toggle("showMLHazard")}
+          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+            layers.showMLHazard ? "bg-fuchsia-500/20 border border-fuchsia-500/40 text-fuchsia-200" : "bg-white/5 text-gray-400"
+          }`}
+        >
+          <span>ML Crater Detection (Advisory)</span>
+          {layers.showMLHazard ? <Eye className="w-3.5 h-3.5 text-fuchsia-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+        </button>
+
+        <button
+          onClick={() => toggle("showHazard")}
+          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
+            layers.showHazard ? "bg-rose-500/15 border border-rose-500/30 text-rose-200" : "bg-white/5 text-gray-400"
+          }`}
+        >
+          <span>Terrain Slope Hazard (&gt; {layers.maxSlopeLimit}&deg;)</span>
+          {layers.showHazard ? <Eye className="w-3.5 h-3.5 text-rose-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
+        </button>
+
         <button
           onClick={() => toggle("showEarthVisibility")}
           className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
@@ -82,16 +115,6 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
         </button>
 
         <button
-          onClick={() => toggle("showHazard")}
-          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
-            layers.showHazard ? "bg-rose-500/15 border border-rose-500/30 text-rose-200" : "bg-white/5 text-gray-400"
-          }`}
-        >
-          <span>Rover Hazard Mask (&gt; {layers.maxSlopeLimit}&deg;)</span>
-          {layers.showHazard ? <Eye className="w-3.5 h-3.5 text-rose-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
-        </button>
-
-        <button
           onClick={() => toggle("showRoughness")}
           className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
             layers.showRoughness ? "bg-amber-500/15 border border-amber-500/30 text-amber-200" : "bg-white/5 text-gray-400"
@@ -99,16 +122,6 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
         >
           <span>Roughness (TRI)</span>
           {layers.showRoughness ? <Eye className="w-3.5 h-3.5 text-amber-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
-        </button>
-
-        <button
-          onClick={() => toggle("showAspect")}
-          className={`flex items-center justify-between px-3 py-2 rounded-md transition-colors ${
-            layers.showAspect ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-200" : "bg-white/5 text-gray-400"
-          }`}
-        >
-          <span>Aspect (Compass)</span>
-          {layers.showAspect ? <Eye className="w-3.5 h-3.5 text-emerald-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
         </button>
 
         <button
@@ -120,6 +133,57 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
           <span>DEM Hillshade</span>
           {layers.showHillshade ? <Eye className="w-3.5 h-3.5 text-blue-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
         </button>
+      </div>
+
+      {/* Model Metadata Card */}
+      <div className="bg-slate-900/70 border border-slate-700/60 rounded p-2.5 flex flex-col gap-1.5">
+        <div className="flex items-center gap-1.5 text-fuchsia-300 font-semibold text-[11px]">
+          <Cpu className="w-3.5 h-3.5 text-fuchsia-400" />
+          <span>Active ML Model</span>
+        </div>
+        <div className="flex justify-between text-[11px] font-mono">
+          <span className="text-gray-400">Model:</span>
+          <span className="text-slate-200 font-bold">crater_detector_v1</span>
+        </div>
+        <div className="flex justify-between text-[10px] font-mono">
+          <span className="text-gray-400">Version:</span>
+          <span className="text-slate-300">1.0.0 (signed)</span>
+        </div>
+        <div className="flex justify-between text-[10px] font-mono">
+          <span className="text-gray-400">Runtime:</span>
+          <span className="text-slate-300">ONNX CPU (IR-10)</span>
+        </div>
+      </div>
+
+      {/* Advisory Callout */}
+      <div className="bg-amber-950/30 border border-amber-500/40 rounded p-2 flex items-start gap-1.5 text-[10px] text-amber-200">
+        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+        <span>
+          <strong>Advisory Note:</strong> ML crater detections are advisory. Always consult terrain slope hazards independently.
+        </span>
+      </div>
+
+      {/* ML Confidence Threshold Slider */}
+      <div className="flex flex-col gap-1.5 border-t border-white/10 pt-3">
+        <div className="flex justify-between items-center text-[11px] text-gray-300">
+          <label htmlFor="ml-confidence-range">ML Confidence Cutoff</label>
+          <span className="font-mono text-fuchsia-300">{Math.round(layers.mlConfidenceThreshold * 100)}%</span>
+        </div>
+        <input
+          id="ml-confidence-range"
+          type="range"
+          min="0.40"
+          max="0.95"
+          step="0.05"
+          value={layers.mlConfidenceThreshold}
+          onChange={(e) => onChange({ ...layers, mlConfidenceThreshold: Number(e.target.value) })}
+          className="w-full accent-fuchsia-400 cursor-pointer"
+        />
+        <div className="flex justify-between text-[10px] text-gray-500 font-mono">
+          <span>40% (Loose)</span>
+          <span>60% (Default)</span>
+          <span>95% (Strict)</span>
+        </div>
       </div>
 
       {/* Colormap Selector */}

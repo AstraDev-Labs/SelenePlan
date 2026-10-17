@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Crosshair, Moon, Radio, ShieldAlert, Sun, Wifi, WifiOff } from "lucide-react";
+import { CheckCircle2, Crosshair, Cpu, Moon, ShieldAlert, Sun, Wifi, WifiOff } from "lucide-react";
 
 export interface PointInspection {
   x_m: number;
@@ -22,6 +22,9 @@ export interface PointInspection {
   earth_visible_fraction?: number;
   longest_blackout_hours?: number;
   earth_series?: boolean[];
+  ml_hazard_detected?: boolean;
+  ml_confidence?: number;
+  fused_hazard?: boolean;
 }
 
 interface InspectorPanelProps {
@@ -45,6 +48,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
     );
   }
 
+  const isFusedHazard = inspection.fused_hazard ?? (inspection.is_hazard || (inspection.ml_hazard_detected && (inspection.ml_confidence ?? 0) >= 0.60));
+
   return (
     <div className="glass-panel p-4 w-72 flex flex-col gap-3 text-xs font-mono">
       <div className="flex items-center justify-between border-b border-white/10 pb-2">
@@ -57,26 +62,51 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
         )}
       </div>
 
-      {/* Hazard Status Flag */}
+      {/* Fused Hazard Status Flag */}
       <div
         className={`flex items-center justify-between p-2 rounded border ${
-          inspection.is_hazard
+          isFusedHazard
             ? "bg-rose-950/40 border-rose-500/40 text-rose-300"
             : "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
         }`}
       >
         <div className="flex items-center gap-1.5 font-bold font-sans">
-          {inspection.is_hazard ? (
+          {isFusedHazard ? (
             <ShieldAlert className="w-4 h-4 text-rose-400" aria-hidden="true" />
           ) : (
             <CheckCircle2 className="w-4 h-4 text-emerald-400" aria-hidden="true" />
           )}
-          <span>{inspection.is_hazard ? "TERRAIN HAZARD" : "SAFE TERRAIN"}</span>
+          <span>{isFusedHazard ? "FUSED HAZARD" : "SAFE TERRAIN"}</span>
         </div>
         <span className="text-[10px] font-mono">
-          {inspection.is_hazard ? "SLOPE LIMIT EXCEEDED" : "TRAVERSABLE"}
+          {inspection.is_hazard ? "SLOPE EXCEEDED" : inspection.ml_hazard_detected ? "ML CRATER" : "TRAVERSABLE"}
         </span>
       </div>
+
+      {/* ML Advisory Detection Status */}
+      {inspection.ml_hazard_detected !== undefined && (
+        <div
+          className={`flex flex-col gap-1 p-2 rounded border ${
+            inspection.ml_hazard_detected
+              ? "bg-fuchsia-950/30 border-fuchsia-500/40 text-fuchsia-200"
+              : "bg-slate-900/60 border-slate-700/60 text-slate-300"
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 font-semibold font-sans">
+              <Cpu className="w-3.5 h-3.5 text-fuchsia-400" />
+              <span>ML Crater Detector</span>
+            </div>
+            <span className="text-[10px] font-mono">
+              {inspection.ml_hazard_detected ? `${Math.round((inspection.ml_confidence ?? 0) * 100)}% CONF` : "CLEAR"}
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[10px] text-gray-400">
+            <span>Model: crater_detector_v1 (1.0.0)</span>
+            <span className="text-amber-300 italic text-[9px]">Advisory Only</span>
+          </div>
+        </div>
+      )}
 
       {/* Solar Illumination Status */}
       {inspection.is_lit !== undefined && (
@@ -120,38 +150,35 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
             ) : (
               <WifiOff className="w-4 h-4 text-red-400" aria-hidden="true" />
             )}
-            <span>{inspection.earth_visible ? "EARTH COMM: VISIBLE" : "EARTH COMM: BLACKOUT"}</span>
+            <span>{inspection.earth_visible ? "EARTH VISIBLE (LOS)" : "EARTH OCCULTED"}</span>
           </div>
           <span className="text-[10px] font-mono">
-            {inspection.earth_elevation_deg !== undefined ? `${inspection.earth_elevation_deg >= 0 ? "+" : ""}${inspection.earth_elevation_deg.toFixed(1)}°` : ""}
+            {inspection.earth_elevation_deg !== undefined ? `${inspection.earth_elevation_deg >= 0 ? "+" : ""}${inspection.earth_elevation_deg.toFixed(1)}° EL` : ""}
           </span>
         </div>
       )}
 
-      {/* Combined Sun & Earth Dual Timeline Strip */}
-      {((inspection.time_series && inspection.time_series.length > 0) || (inspection.earth_series && inspection.earth_series.length > 0)) && (
-        <div className="flex flex-col gap-1.5 bg-black/40 p-2.5 rounded border border-white/10">
-          <div className="flex items-center justify-between text-[10px] text-gray-300 font-sans font-semibold border-b border-white/5 pb-1">
-            <span className="flex items-center gap-1">
-              <Radio className="w-3 h-3 text-cyan-400" />
-              <span>Combined Sun & Earth Profile</span>
-            </span>
-            <span className="text-gray-400 font-mono">48-Hour</span>
+      {/* Dual 48-Hour Micro-Timeline Strips */}
+      {(inspection.time_series || inspection.earth_series) && (
+        <div className="space-y-1.5 bg-black/40 p-2.5 rounded border border-white/5">
+          <div className="flex justify-between text-[10px] text-gray-400 font-sans">
+            <span>48-Hour Dual Windows (Sun &amp; Earth)</span>
+            <span>48h (T+0..48)</span>
           </div>
 
           {/* Sun Track */}
           {inspection.time_series && (
             <div className="space-y-0.5">
-              <div className="flex justify-between text-[9px] text-amber-300">
-                <span>[SUN] Sunlight Track:</span>
-                <span>{inspection.lit_fraction !== undefined ? `${(inspection.lit_fraction * 100).toFixed(0)}%` : ""}</span>
+              <div className="flex justify-between text-[9px] text-amber-300/80 font-sans">
+                <span>[SUN] Sunlight Window</span>
+                <span>{inspection.lit_fraction !== undefined ? `${Math.round(inspection.lit_fraction * 100)}%` : ""}</span>
               </div>
-              <div className="flex items-center gap-0.5 h-2.5 w-full bg-black/60 p-0.5 rounded">
+              <div className="flex h-2.5 w-full gap-[1px] bg-black/60 rounded p-[1px] overflow-hidden" aria-label="Sunlight Timeline">
                 {inspection.time_series.slice(0, 48).map((lit, idx) => (
                   <div
                     key={idx}
-                    className={`flex-1 h-full rounded-[1px] ${lit ? "bg-amber-400" : "bg-indigo-950"}`}
-                    title={`Hour ${idx}: ${lit ? "Sunlit" : "Dark"}`}
+                    className={`flex-1 h-full rounded-[1px] ${lit ? "bg-amber-400" : "bg-slate-900"}`}
+                    title={`Hour ${idx}: ${lit ? "Sunlit" : "Shadowed"}`}
                   />
                 ))}
               </div>
@@ -160,12 +187,12 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
 
           {/* Earth Track */}
           {inspection.earth_series && (
-            <div className="space-y-0.5 pt-0.5">
-              <div className="flex justify-between text-[9px] text-cyan-300">
-                <span>[EARTH] Line-of-Sight Track:</span>
-                <span>{inspection.earth_visible_fraction !== undefined ? `${(inspection.earth_visible_fraction * 100).toFixed(0)}%` : ""}</span>
+            <div className="space-y-0.5 pt-1 border-t border-white/5">
+              <div className="flex justify-between text-[9px] text-cyan-300/80 font-sans">
+                <span>[EARTH] Direct Visibility</span>
+                <span>{inspection.earth_visible_fraction !== undefined ? `${Math.round(inspection.earth_visible_fraction * 100)}%` : ""}</span>
               </div>
-              <div className="flex items-center gap-0.5 h-2.5 w-full bg-black/60 p-0.5 rounded">
+              <div className="flex h-2.5 w-full gap-[1px] bg-black/60 rounded p-[1px] overflow-hidden" aria-label="Earth Visibility Timeline">
                 {inspection.earth_series.slice(0, 48).map((vis, idx) => (
                   <div
                     key={idx}

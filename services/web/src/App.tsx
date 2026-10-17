@@ -25,6 +25,9 @@ export const App: React.FC = () => {
     showIllumination: true,
     showPSR: false,
     showEarthVisibility: false,
+    showMLHazard: false,
+    showFusedHazard: true,
+    mlConfidenceThreshold: 0.60,
     colormap: "viridis",
     maxSlopeLimit: 15,
   });

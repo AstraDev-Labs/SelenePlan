@@ -1,0 +1,58 @@
+{
+  "model_id": "crater_detector_v1",
+  "version": "1.0.0",
+  "name": "Dual-Head Circle-Aware Crater Detector",
+  "architecture": "Dual-Head CNN (Standard ONNX Opset 17, IR 10)",
+  "description": "Advisory crater and obstacle detection model operating on 256x256 lunar orthoimagery tiles at 0.5-2.0 m/px.",
+  "intended_use": "Advisory rover traverse constraint and landing site obstacle mapping. Not a flight-qualified autonomous navigation system.",
+  "input_schema": {
+    "tensor_name": "input_image",
+    "shape": [1, 1, 256, 256],
+    "dtype": "float32",
+    "range": [0.0, 1.0]
+  },
+  "output_schemas": [
+    {
+      "tensor_name": "hazard_heatmap",
+      "shape": [1, 1, 256, 256],
+      "dtype": "float32",
+      "range": [0.0, 1.0]
+    },
+    {
+      "tensor_name": "centroid_heatmap",
+      "shape": [1, 1, 256, 256],
+      "dtype": "float32",
+      "range": [0.0, 1.0]
+    }
+  ],
+  "thresholds": {
+    "min_precision": 0.70,
+    "min_recall": 0.70,
+    "min_f1": 0.70,
+    "min_small_crater_recall": 0.65
+  },
+  "measured_metrics": {
+    "precision": 0.724,
+    "recall": 0.700,
+    "f1": 0.712,
+    "recall_small": 1.000,
+    "recall_medium": 0.693,
+    "recall_large": 0.000,
+    "recall_low_sun": 0.967,
+    "recall_med_sun": 1.000,
+    "recall_high_sun": 0.133
+  },
+  "training_manifest": {
+    "dataset_source": "Synthetic Lunar Crater Benchmarks v1.0",
+    "catalog_license": "Apache-2.0 (Synthetic fixtures, clearly labeled per AGENTS.md)",
+    "training_quadrangles": ["TRAIN_AOI_A", "TRAIN_AOI_B"],
+    "validation_quadrangle": "VAL_AOI_C",
+    "test_quadrangle": "TEST_SHACKLETON_POLAR"
+  },
+  "limitations": [
+    "Advisory only; terrain slope hazards must always be evaluated independently.",
+    "Reduced recall under high sun illumination (incidence < 60 deg) due to lack of shadow contrast.",
+    "Tile-level receptive field limits single-pass detection of craters larger than 100 meters diameter.",
+    "Optical blur degrades detection recall significantly."
+  ]
+}

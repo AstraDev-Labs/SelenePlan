@@ -57,17 +57,31 @@ describe("Web UI Components", () => {
       showIllumination: true,
       showPSR: false,
       showEarthVisibility: false,
+      showMLHazard: false,
+      showFusedHazard: true,
+      mlConfidenceThreshold: 0.60,
       colormap: "viridis" as const,
       maxSlopeLimit: 15,
     };
 
     render(<LayerControl layers={initialLayers} onChange={handleChange} />);
 
+    // Verify model info card and advisory warning
+    expect(screen.getByText(/crater_detector_v1/i)).toBeInTheDocument();
+    expect(screen.getByText(/ML crater detections are advisory/i)).toBeInTheDocument();
+
     // Click slope toggle
     const slopeBtn = screen.getByText(/Slope \(Horn 3x3\)/i);
     fireEvent.click(slopeBtn);
     expect(handleChange).toHaveBeenCalledWith(
       expect.objectContaining({ showSlope: false })
+    );
+
+    // Toggle Fused Hazard
+    const fusedBtn = screen.getByText(/Fused Hazard Map/i);
+    fireEvent.click(fusedBtn);
+    expect(handleChange).toHaveBeenCalledWith(
+      expect.objectContaining({ showFusedHazard: false })
     );
 
     // Change colormap
@@ -90,13 +104,18 @@ describe("Web UI Components", () => {
       roughness_m: 1.94,
       is_hazard: true,
       feature_name: "Shackleton Inner Wall",
+      ml_hazard_detected: true,
+      ml_confidence: 0.85,
+      fused_hazard: true,
     };
 
     render(<InspectorPanel inspection={inspection} />);
     expect(screen.getByText("Shackleton Inner Wall")).toBeInTheDocument();
     expect(screen.getByText("-1850.4 m")).toBeInTheDocument();
     expect(screen.getByText("24.3°")).toBeInTheDocument();
-    expect(screen.getByText("TERRAIN HAZARD")).toBeInTheDocument();
+    expect(screen.getByText("FUSED HAZARD")).toBeInTheDocument();
+    expect(screen.getByText(/ML Crater Detector/i)).toBeInTheDocument();
+    expect(screen.getByText(/85% CONF/i)).toBeInTheDocument();
   });
 
   it("handles playback, scrubbing, and speed changes in TimelineScrubber", () => {

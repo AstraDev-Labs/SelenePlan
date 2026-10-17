@@ -49,6 +49,7 @@ selene-plan/
 | **selene-horizon** | `libs/selene-horizon` | Py Library | ✅ Verified & Tested | Phase 2 |
 | **selene-testing** | `libs/selene-testing` | Py Library | ✅ Verified & Tested | Phase 1 |
 | **audit-service** | `services/audit-service` | Port 8101 | ✅ Verified & Tested | Phase 0 |
+| **hazard-ml-service** | `services/hazard-ml-service` | Port 8104 | ✅ Verified & Tested | Phase 4 |
 | **hello-service** | `services/hello-service` | Port 8100 | ✅ Verified & Tested | Phase 0 |
 | **comms-service** | `services/comms-service` | Port 8106 | ✅ Verified & Tested | Phase 3 |
 | **gateway** | `services/gateway` | Port 8000 | ✅ Verified & Tested | Phase 0 |
@@ -57,7 +58,7 @@ selene-plan/
 | **ingestion-service** | `services/ingestion-service` | Port 8102 | ✅ Verified & Tested | Phase 1 |
 | **provenance-service** | `services/provenance-service` | Port 8111 | ✅ Verified & Tested | Phase 1/5 |
 | **terrain-service** | `services/terrain-service` | Port 8103 | ✅ Verified & Tested | Phase 1 |
-| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1/2/3 |
+| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1-4 |
 
 ## Local quick start
 ```bash

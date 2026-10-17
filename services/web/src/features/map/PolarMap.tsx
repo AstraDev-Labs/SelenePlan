@@ -1,65 +1,45 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { MapPin, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import { LayerState } from "./LayerControl";
 import { PointInspection } from "./InspectorPanel";
-import { TimelineScrubber } from "./TimelineScrubber";
+import { ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
 
 interface PolarMapProps {
   layers: LayerState;
   onInspect: (data: PointInspection | null) => void;
+  currentStep?: number;
 }
 
-// Colormap ramps
-function getViridisColor(t: number): [number, number, number] {
-  const clamped = Math.max(0, Math.min(1, t));
-  const r = Math.round(68 + clamped * (253 - 68));
-  const g = Math.round(1 + clamped * (231 - 1));
-  const b = Math.round(84 + clamped * (37 - 84));
-  return [r, g, b];
-}
+// 20 km x 20 km Shackleton AOI extent
+const EXTENT_M = 10000.0;
+const TOTAL_STEPS = 708;
 
-function getMagmaColor(t: number): [number, number, number] {
-  const clamped = Math.max(0, Math.min(1, t));
-  const r = Math.round(20 + clamped * (251 - 20));
-  const g = Math.round(11 + clamped * (252 - 11));
-  const b = Math.round(54 + clamped * (191 - 54));
-  return [r, g, b];
-}
+// Simulated ML Detected Craters (advisory obstacles in Shackleton perimeter)
+const SIMULATED_ML_CRATERS = [
+  { x: 1400, y: 1600, r: 280, conf: 0.88, name: "Crater A (ML Advisory)" },
+  { x: -1800, y: 800, r: 220, conf: 0.82, name: "Crater B (ML Advisory)" },
+  { x: 500, y: -2200, r: 310, conf: 0.79, name: "Crater C (ML Advisory)" },
+  { x: -1200, y: -1900, r: 190, conf: 0.84, name: "Crater D (ML Advisory)" },
+];
 
-export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
+export const PolarMap: React.FC<PolarMapProps> = ({
+  layers,
+  onInspect,
+  currentStep = 0,
+}) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [zoom, setZoom] = useState<number>(1.0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
 
-  // Timeline State (72 steps = 72 hours simulation of Shackleton South Pole AOI)
-  const TOTAL_STEPS = 72;
-  const [currentStep, setCurrentStep] = useState<number>(12);
-
-  // Precomputed ISO timestamps for timeline
-  const timestamps = useRef<string[]>(
-    Array.from({ length: TOTAL_STEPS }, (_, i) => {
-      const d = new Date(Date.UTC(2026, 2, 1, i, 0, 0));
-      return d.toISOString().replace(".000Z", "Z");
-    })
-  ).current;
-
-  // Map spatial parameters: 500x500 grid, 20m resolution, origin = -5000m to +5000m
-  const GRID_SIZE = 500;
-  const RESOLUTION_M = 20.0;
-  const EXTENT_M = (GRID_SIZE * RESOLUTION_M) / 2; // 5000m
-
-  // Compute synthetic terrain profile matching Shackleton Crater
+  // Analytic Shackleton DEM profile generator
   const getElevationAt = useCallback((xM: number, yM: number) => {
     const dist = Math.sqrt(xM * xM + yM * yM);
-    const rimRadius = 2100.0; // 2.1 km radius
-    if (dist < rimRadius) {
-      // Parabolic bowl crater
-      const depth = 4200.0;
+    const rimRadius = 2100.0;
+    const depth = 4200.0;
+    if (dist <= rimRadius) {
       return -4200.0 + (depth * Math.pow(dist / rimRadius, 2));
     } else {
-      // Ejecta blanket decay
       return -800.0 + (1200.0 * Math.pow(rimRadius / dist, 3));
     }
   }, []);
@@ -67,13 +47,22 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
   const getSlopeAt = useCallback((xM: number, yM: number) => {
     const dist = Math.sqrt(xM * xM + yM * yM);
     const rimRadius = 2100.0;
-    if (dist < 400.0) return 3.2; // Crater floor is relatively flat
+    if (dist < 400.0) return 3.2;
     if (dist <= rimRadius) {
-      // Steep walls
       return 15.0 + 17.0 * (dist / rimRadius);
     } else {
       return Math.max(2.0, 14.0 * Math.exp(-(dist - rimRadius) / 1500.0));
     }
+  }, []);
+
+  const getMLHazardAt = useCallback((xM: number, yM: number) => {
+    for (const c of SIMULATED_ML_CRATERS) {
+      const d = Math.hypot(xM - c.x, yM - c.y);
+      if (d <= c.r) {
+        return { detected: true, confidence: c.conf * (1.0 - 0.2 * (d / c.r)) };
+      }
+    }
+    return { detected: false, confidence: 0.0 };
   }, []);
 
   // Solar position at given step
@@ -81,7 +70,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     const az = (step * 5.0) % 360.0;
     const el = 1.54 * Math.sin((step / TOTAL_STEPS) * 2 * Math.PI + 0.2);
     return { az, el };
-  }, [TOTAL_STEPS]);
+  }, []);
 
   // Point illumination evaluation
   const isPointLit = useCallback((xM: number, yM: number, step: number) => {
@@ -97,13 +86,9 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
   // Point Earth direct-to-Earth line of sight
   const isPointEarthVisible = useCallback((xM: number, yM: number) => {
     const dist = Math.sqrt(xM * xM + yM * yM);
-    // Crater floor (dist < 1850m) is occulted by the surrounding 4 km high rim
     if (dist < 1850.0) return false;
-    // Rim and connecting ridge have clear visibility to Earth (+2.4 deg elevation)
     return true;
   }, []);
-
-  const { az: currentSunAz, el: currentSunEl } = getSunGeometryAt(currentStep);
 
   // Render Canvas
   useEffect(() => {
@@ -132,27 +117,33 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
         const slope = getSlopeAt(xM, yM);
         const elev = getElevationAt(xM, yM);
         const distM = Math.sqrt(xM * xM + yM * yM);
-        const isHazard = slope > layers.maxSlopeLimit;
+        const isTerrainHazard = slope > layers.maxSlopeLimit;
+        const mlHazard = getMLHazardAt(xM, yM);
+        const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
+        const isFusedHazard = isTerrainHazard || isMLHazard;
+
         const lit = isPointLit(xM, yM, currentStep);
         const earthVis = isPointEarthVisible(xM, yM);
         const isPSR = distM < 1850.0;
 
         let r = 25, g = 30, b = 45;
 
-        if (layers.showEarthVisibility) {
+        if (layers.showFusedHazard && isFusedHazard) {
+          // Fused Hazard: Vibrant Warning Amber / Crimson
+          r = 225; g = 50; b = 40;
+        } else if (layers.showMLHazard && isMLHazard) {
+          // ML Crater Detection: Fuchsia / Magenta
+          r = 217; g = 70; b = 239;
+        } else if (layers.showEarthVisibility) {
           if (earthVis) {
-            // Direct to Earth line-of-sight: vibrant cyan
             r = 6; g = 182; b = 212;
           } else {
-            // Communications blackout: deep dark crimson
             r = 75; g = 12; b = 30;
           }
         } else if (layers.showIllumination) {
           if (lit) {
-            // Sunlit warm gold
             r = 230; g = 190; b = 80;
           } else {
-            // Shadowed deep obsidian blue
             r = 15; g = 20; b = 35;
           }
         } else if (layers.showSlope) {
@@ -175,8 +166,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
           b = Math.round(b * 0.4 + 200);
         }
 
-        // Rover Hazard Overlay
-        if (layers.showHazard && isHazard) {
+        // Rover Terrain Slope Hazard Overlay (when fused is not already showing)
+        if (layers.showHazard && !layers.showFusedHazard && isTerrainHazard) {
           r = Math.min(255, r + 150);
           g = Math.round(g * 0.3);
           b = Math.round(b * 0.3);
@@ -219,6 +210,28 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     ctx.stroke();
     ctx.setLineDash([]);
 
+    // Draw Vector Crater Circles when ML Hazard Layer is active
+    if (layers.showMLHazard || layers.showFusedHazard) {
+      SIMULATED_ML_CRATERS.forEach((c) => {
+        const px = width / 2 + (c.x / scale);
+        const py = height / 2 - (c.y / scale);
+        const rPx = c.r / scale;
+
+        ctx.strokeStyle = "rgba(217, 70, 239, 0.85)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.arc(px, py, rPx, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Label
+        ctx.fillStyle = "rgba(240, 171, 252, 0.95)";
+        ctx.font = "9px 'Space Grotesk', monospace";
+        ctx.fillText(`${c.name} (${Math.round(c.conf * 100)}%)`, px - rPx, py - rPx - 4);
+      });
+    }
+
     // Annotations
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
     ctx.font = "11px 'Space Grotesk', sans-serif";
@@ -226,7 +239,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     ctx.fillText("South Pole (90°S)", width / 2 + 6, height / 2 + 15);
 
     ctx.restore();
-  }, [zoom, pan, layers, currentStep, getSlopeAt, getElevationAt, isPointLit, isPointEarthVisible]);
+  }, [zoom, pan, layers, currentStep, getSlopeAt, getElevationAt, getMLHazardAt, isPointLit, isPointEarthVisible]);
 
   // Mouse move point inspector
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -257,6 +270,10 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
     const lit = isPointLit(xM, yM, currentStep);
     const earthVis = isPointEarthVisible(xM, yM);
     const isPSR = distM < 1850.0;
+    const mlHazard = getMLHazardAt(xM, yM);
+    const isTerrainHazard = slope > layers.maxSlopeLimit;
+    const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
+    const isFusedHazard = isTerrainHazard || isMLHazard;
 
     // Build 48h solar & earth series
     const sunSeries = Array.from({ length: 48 }, (_, t) => isPointLit(xM, yM, t));
@@ -273,7 +290,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
       slope_deg: slope,
       aspect_deg: (Math.atan2(xM, yM) * 180.0) / Math.PI,
       roughness_m: slope * 0.08,
-      is_hazard: slope > layers.maxSlopeLimit,
+      is_hazard: isTerrainHazard,
       feature_name: distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge",
       is_lit: lit,
       lit_fraction: litFrac,
@@ -285,6 +302,9 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
       earth_visible_fraction: isPSR ? 0.0 : 0.88,
       longest_blackout_hours: isPSR ? 708.0 : 12.0,
       earth_series: earthSeries,
+      ml_hazard_detected: mlHazard.detected,
+      ml_confidence: mlHazard.confidence,
+      fused_hazard: isFusedHazard,
     });
   };
 
@@ -318,7 +338,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
             <ZoomIn className="w-4 h-4" />
           </button>
           <button
-            onClick={() => setZoom((z) => Math.max(0.5, z * 0.8))}
+            onClick={() => setZoom((z) => Math.max(0.5, z / 1.25))}
             aria-label="Zoom Out"
             title="Zoom Out"
             className="p-1.5 rounded hover:bg-white/10 text-gray-300 hover:text-cyan-300 transition-colors"
@@ -334,24 +354,22 @@ export const PolarMap: React.FC<PolarMapProps> = ({ layers, onInspect }) => {
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Projection Scale Indicator */}
-        <div className="absolute bottom-3 left-4 flex items-center gap-2 bg-gray-950/80 px-2.5 py-1 rounded border border-white/10 text-[10px] font-mono text-cyan-300">
-          <MapPin className="w-3 h-3 text-cyan-400" />
-          <span>Scale: 20 m/pixel | CRS: IAU_2015:30100 (Polar Stereographic)</span>
-        </div>
       </div>
-
-      {/* Embedded Timeline Scrubber */}
-      <TimelineScrubber
-        totalSteps={TOTAL_STEPS}
-        currentStep={currentStep}
-        onStepChange={setCurrentStep}
-        timestamps={timestamps}
-        litFraction={0.62}
-        sunAzimuthDeg={currentSunAz}
-        sunElevationDeg={currentSunEl}
-      />
     </div>
   );
 };
+
+// Helper colormap interpolators
+function getViridisColor(t: number): [number, number, number] {
+  const r = Math.round(68 + t * (253 - 68));
+  const g = Math.round(1 + t * (231 - 1));
+  const b = Math.round(84 + t * (37 - 84));
+  return [r, g, b];
+}
+
+function getMagmaColor(t: number): [number, number, number] {
+  const r = Math.round(0 + t * (251 - 0));
+  const g = Math.round(0 + t * (136 - 0));
+  const b = Math.round(4 + t * (153 - 4));
+  return [r, g, b];
+}
