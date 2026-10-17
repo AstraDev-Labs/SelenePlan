@@ -26,3 +26,18 @@ envelope = EventEnvelope(
     data={"status": "ready"},
 )
 ```
+
+## Consumer Deduplication & Lock-Duration Limitations
+
+The two-phase deduplication store (`claim` with `lock_ttl_seconds`, followed by `finalize` with `completed_ttl_seconds`) safeguards against lost events during worker crashes:
+
+- **Short Synchronous Handlers (< 60s)**: The default `lock_ttl_seconds=60` guarantees that if a worker crashes mid-handler, the uncommitted Kafka offset will be redelivered and successfully re-claimed once the 60s lease expires.
+- **Long-Running Analysis Handlers (e.g., Illumination / Traverse Search up to 15m per NFR-03)**:
+  > [!WARNING]
+  > A fixed short lease will expire while a long analysis job is still running. In the event of a Kafka rebalance or redelivery, a second worker could claim the same `event_id` and execute concurrently.
+  >
+  > For Phase 1+, services handling long-running workloads must adopt either:
+  > 1. **Heartbeat Lock Renewal**: A background async task that renews the in-progress Redis lease every $N$ seconds while the handler is active, with Kafka `max.poll.interval.ms` tuned to exceed total expected execution time.
+  > 2. **Asynchronous Job Dispatch (ADR-0002)**: The Kafka consumer records the job state (`status=PENDING`) in PostgreSQL, commits the Kafka offset immediately, and delegates actual compute to an out-of-band worker/engine, decoupling Kafka consumer heartbeats from execution duration.
+  >
+  > Furthermore, domain handlers must remain strictly idempotent: a network failure during `finalize` after successful execution will trigger redelivery, which is safe only when handlers are idempotent.

@@ -279,3 +279,65 @@ async def test_redis_dedupe_store_claim_finalize_release() -> None:
     # Release
     await store.release("evt-1")
     redis_mock.delete.assert_called_with("test:dedupe:evt-1")
+
+    # mark_seen success and duplicate
+    redis_mock.set.return_value = True
+    assert await store.mark_seen("evt-2") is True
+    redis_mock.set.return_value = False
+    assert await store.mark_seen("evt-3") is False
+
+
+@pytest.mark.asyncio
+async def test_consumer_accepts_raw_bytes_payload() -> None:
+    dedupe = InMemoryDedupeStore()
+    consumer = DummyConsumer(dedupe_store=dedupe)
+    commit_mock = AsyncMock()
+    payload_bytes = create_sample_payload("55555555-5555-5555-5555-555555555555").encode("utf-8")
+
+    result = await consumer.consume_record(
+        topic="selene-terrain-analysis-requested",
+        raw_payload=payload_bytes,
+        commit_fn=commit_mock,
+    )
+    assert result.status == "processed"
+    assert commit_mock.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_consumer_failure_in_finalize_releases_claim_and_leaves_offset_uncommitted() -> None:
+    """When finalize fails after handler success, claim is released and offset is NOT committed."""
+    dedupe = InMemoryDedupeStore()
+    consumer = DummyConsumer(dedupe_store=dedupe)
+    commit_mock = AsyncMock()
+    evt_id = "66666666-6666-6666-6666-666666666666"
+    payload = create_sample_payload(evt_id)
+
+    # Inject failure during finalize (e.g. Redis network disconnect)
+    dedupe.finalize = AsyncMock(
+        side_effect=RuntimeError("Redis connection dropped during finalize")
+    )  # type: ignore[method-assign]
+    release_spy = AsyncMock(wraps=dedupe.release)
+    dedupe.release = release_spy  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError) as exc:
+        await consumer.consume_record(
+            topic="selene-terrain-analysis-requested",
+            raw_payload=payload,
+            commit_fn=commit_mock,
+        )
+    assert "dropped during finalize" in str(exc.value)
+
+    # Offset MUST NOT be committed
+    assert commit_mock.await_count == 0
+
+    # In-progress lease MUST be released to allow redelivery
+    assert release_spy.await_count == 1
+    assert release_spy.await_args[0][0] == evt_id
+
+
+@pytest.mark.asyncio
+async def test_base_consumer_process_not_implemented() -> None:
+    dedupe = InMemoryDedupeStore()
+    consumer = IdempotentEventConsumer(dedupe_store=dedupe)
+    with pytest.raises(NotImplementedError):
+        await consumer.process(None)  # type: ignore[arg-type]
