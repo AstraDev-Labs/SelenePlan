@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from selene_observability.scrubbing import scrub_data
 
 
@@ -32,7 +34,7 @@ def test_scrubber_redacts_all_required_keys_case_insensitively() -> None:
 
 
 def test_scrubber_handles_arbitrary_nesting_and_collections() -> None:
-    nested = {
+    nested: dict[str, Any] = {
         "users": [
             {"id": "u-1", "password": "pass1", "profile": {"email": "u1@selene.local"}},
             {"id": "u-2", "TOKEN": "tok2", "metadata": [{"API_KEY": "key2"}]},

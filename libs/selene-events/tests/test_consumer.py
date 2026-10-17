@@ -304,7 +304,9 @@ async def test_consumer_accepts_raw_bytes_payload() -> None:
 
 
 @pytest.mark.asyncio
-async def test_consumer_failure_in_finalize_releases_claim_and_leaves_offset_uncommitted() -> None:
+async def test_consumer_failure_in_finalize_releases_claim_and_leaves_offset_uncommitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """When finalize fails after handler success, claim is released and offset is NOT committed."""
     dedupe = InMemoryDedupeStore()
     consumer = DummyConsumer(dedupe_store=dedupe)
@@ -313,11 +315,13 @@ async def test_consumer_failure_in_finalize_releases_claim_and_leaves_offset_unc
     payload = create_sample_payload(evt_id)
 
     # Inject failure during finalize (e.g. Redis network disconnect)
-    dedupe.finalize = AsyncMock(
-        side_effect=RuntimeError("Redis connection dropped during finalize")
-    )  # type: ignore[method-assign]
+    monkeypatch.setattr(
+        dedupe,
+        "finalize",
+        AsyncMock(side_effect=RuntimeError("Redis connection dropped during finalize")),
+    )
     release_spy = AsyncMock(wraps=dedupe.release)
-    dedupe.release = release_spy  # type: ignore[method-assign]
+    monkeypatch.setattr(dedupe, "release", release_spy)
 
     with pytest.raises(RuntimeError) as exc:
         await consumer.consume_record(
@@ -332,7 +336,7 @@ async def test_consumer_failure_in_finalize_releases_claim_and_leaves_offset_unc
 
     # In-progress lease MUST be released to allow redelivery
     assert release_spy.await_count == 1
-    assert release_spy.await_args[0][0] == evt_id
+    assert release_spy.await_args is not None and release_spy.await_args[0][0] == evt_id
 
 
 @pytest.mark.asyncio

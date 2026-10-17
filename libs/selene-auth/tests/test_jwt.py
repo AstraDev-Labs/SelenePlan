@@ -533,8 +533,8 @@ def test_jwks_cache_add_key_and_no_url() -> None:
     cache.add_key("custom-kid", "dummy-key")
     assert cache.get_key("custom-kid") == "dummy-key"
 
-    # refresh with no url returns None
-    assert cache.refresh() is None
+    # refresh with no url executes without error
+    cache.refresh()
 
 
 def test_jwks_cache_unknown_kid_after_refresh() -> None:

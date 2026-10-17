@@ -15,4 +15,17 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["libs"]
+testpaths = ["libs", "services"]
+markers = [
+    "integration: marks tests as integration tests (requires live external services)",
+]
+
+[tool.coverage.run]
+source = [
+    "libs/selene-auth/src",
+    "libs/selene-events/src",
+    "libs/selene-observability/src",
+]
+omit = [
+    "*/tests/*",
+]

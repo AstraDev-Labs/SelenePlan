@@ -1,0 +1,466 @@
+{
+  "realm": "selene",
+  "enabled": true,
+  "displayName": "SelenePlan Mission Planning",
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "passwordPolicy": "length(12) and notUsername and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)",
+  "attributes": {
+    "acr.loa.map": "{\"1\":1,\"2\":2,\"mfa\":2}"
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "analyst",
+        "description": "Flight analyst - creates mission projects, scenarios, and runs analyses"
+      },
+      {
+        "name": "operator",
+        "description": "Mission operator - runs what-if analyses on draft plans"
+      },
+      {
+        "name": "approver",
+        "description": "Mission approver - approves or rejects final mission plans with MFA"
+      },
+      {
+        "name": "steward",
+        "description": "Data steward - manages datasets and model metadata"
+      },
+      {
+        "name": "admin",
+        "description": "System administrator - manages users and system infrastructure"
+      },
+      {
+        "name": "auditor",
+        "description": "Independent auditor - reads tamper-evident audit logs across projects"
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "selene-default",
+      "description": "Default shared scope for Selene API clients defining audience, roles, org_id, and acr",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-selene-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "selene-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "org-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "org_id",
+            "claim.name": "org_id",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "acr loa level",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-acr-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "web-origins",
+    "acr",
+    "roles",
+    "profile",
+    "email",
+    "selene-default"
+  ],
+  "clients": [
+    {
+      "clientId": "selene-api",
+      "name": "Selene API Resource Server",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    },
+    {
+      "clientId": "selene-web",
+      "name": "Selene Web SPA",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:3000/",
+        "http://localhost:3000/callback",
+        "http://localhost:8080/",
+        "http://localhost:8080/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:8080"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "roles",
+        "profile",
+        "email",
+        "selene-default"
+      ]
+    },
+    {
+      "clientId": "selene-service",
+      "name": "Selene Service-to-Service Client",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-service-secret-fake-12345",
+      "defaultClientScopes": [
+        "selene-default"
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "require-approver-mfa-role",
+      "config": {
+        "condUserRole": "approver"
+      }
+    },
+    {
+      "alias": "require-admin-mfa-role",
+      "config": {
+        "condUserRole": "admin"
+      }
+    },
+    {
+      "alias": "loa-level-2-config",
+      "config": {
+        "loa-condition-level": "2",
+        "loa-max-age": "36000"
+      }
+    }
+  ],
+  "authenticationFlows": [
+    {
+      "alias": "direct grant",
+      "description": "OpenID Connect Resource Owner Grant",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "direct-grant-validate-username",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "authenticator": "direct-grant-validate-password",
+          "requirement": "REQUIRED",
+          "priority": 20
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "flowAlias": "Direct Grant - Conditional Approver OTP"
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 40,
+          "flowAlias": "Direct Grant - Conditional Admin OTP"
+        }
+      ]
+    },
+    {
+      "alias": "Direct Grant - Conditional Approver OTP",
+      "description": "Conditional OTP check for Approver role",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorConfig": "require-approver-mfa-role",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorConfig": "loa-level-2-config",
+          "requirement": "REQUIRED",
+          "priority": 20
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "requirement": "REQUIRED",
+          "priority": 30
+        }
+      ]
+    },
+    {
+      "alias": "Direct Grant - Conditional Admin OTP",
+      "description": "Conditional OTP check for Admin role",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorConfig": "require-admin-mfa-role",
+          "requirement": "REQUIRED",
+          "priority": 10
+        },
+        {
+          "authenticator": "conditional-level-of-authentication",
+          "authenticatorConfig": "loa-level-2-config",
+          "requirement": "REQUIRED",
+          "priority": 20
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "requirement": "REQUIRED",
+          "priority": 30
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "analyst",
+      "firstName": "Flight",
+      "lastName": "Analyst",
+      "email": "analyst@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "analyst"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "operator",
+      "firstName": "Mission",
+      "lastName": "Operator",
+      "email": "operator@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "operator"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "approver",
+      "firstName": "Mission",
+      "lastName": "Approver",
+      "email": "approver@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "approver"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "TOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXP\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "second_approver",
+      "firstName": "Second",
+      "lastName": "Approver",
+      "email": "second_approver@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "approver"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "TOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXQ\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "steward",
+      "firstName": "Data",
+      "lastName": "Steward",
+      "email": "steward@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "steward"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "admin",
+      "firstName": "System",
+      "lastName": "Admin",
+      "email": "admin@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "admin"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "TOTP",
+          "secretData": "{\"value\":\"JBSWY3DPEHPK3PXR\"}",
+          "credentialData": "{\"subType\":\"totp\",\"digits\":6,\"counter\":0,\"period\":30,\"algorithm\":\"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "auditor",
+      "firstName": "Security",
+      "lastName": "Auditor",
+      "email": "auditor@selene.local",
+      "emailVerified": true,
+      "enabled": true,
+      "attributes": {
+        "org_id": [
+          "00000000-0000-0000-0000-000000000001"
+        ]
+      },
+      "realmRoles": [
+        "auditor"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "DevPassword123!",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

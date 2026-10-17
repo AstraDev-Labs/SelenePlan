@@ -49,7 +49,7 @@ class Principal(BaseModel):
             mfa_verified = True
 
         acr = claims.get("acr")
-        if acr in {"mfa", "level2", "gold", "2"}:
+        if acr in {"mfa", "level2", "gold", "2", 2}:
             mfa_verified = True
 
         return cls(
