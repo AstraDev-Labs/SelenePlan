@@ -5,13 +5,16 @@ sources:
   - id: lola-dem
     name: "LOLA Polar DEM (NASA PDS)"
     host: "pds-geosciences.wustl.edu"
-    path_prefix: "/lro/lro-l-lola-3-rdr-v1/lola_gdr/"
+    path_prefix: "/lro/lro-l-lola-3-rdr-v1/"
     license: "NASA Open Data Policy (Public Domain)"
     terms_note: "Free for scientific and educational use with citation of LRO LOLA team."
     max_size_bytes: 524288000 # 500 MB
     allowed_drivers:
       - "GTiff"
       - "GeoTIFF"
+      - "JP2OpenJPEG"
+      - "JPEG2000"
+      - "jp2"
 
   - id: lroc-nac
     name: "LROC NAC Polar Mosaics (ASU)"

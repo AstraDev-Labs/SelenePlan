@@ -34,6 +34,13 @@ python -m mypy --strict services/ingestion-service/src
 uvicorn ingestion_service.main:app --host 0.0.0.0 --port 8102 --reload
 ```
 
+### Real Lunar Data Run (Task 1.5)
+To ingest a real NASA LRO LOLA polar DEM slice and run terrain derivatives:
+```bash
+python scripts/ingest_sample.py
+```
+This downloads a verified 10 km x 10 km South Pole AOI (Shackleton Crater rim) from NASA PDS via HTTP range requests, validates raster boundaries, converts to COG, computes slope/aspect/roughness/hazard, and logs results in `docs/validation/terrain-notes.md`.
+
 ## Security & Architectural Constraints
 - **SSRF Protection:** Resolves hostnames and verifies that every resolved IP does not belong to private networks (RFC 1918), loopback, link-local, carrier-grade NAT, or cloud metadata endpoints (`169.254.169.254`, `metadata.google.internal`). Checks are repeated on every HTTP redirect hop. Rejections emit `audit.event`.
 - **Egress Allowlist:** Only sources defined in `config/allowed_sources.yaml` with valid HTTPS URLs and registered path prefixes can be ingested.
