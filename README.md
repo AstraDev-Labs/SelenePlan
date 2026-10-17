@@ -54,6 +54,7 @@ selene-plan/
 | **ingestion-service** | `services/ingestion-service` | Port 8102 | ✅ Verified & Tested | Phase 1 |
 | **provenance-service** | `services/provenance-service` | Port 8111 | ✅ Verified & Tested | Phase 1/5 |
 | **terrain-service** | `services/terrain-service` | Port 8103 | ✅ Verified & Tested | Phase 1 |
+| **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1 |
 
 ## Local quick start
 ```bash
