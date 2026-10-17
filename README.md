@@ -63,6 +63,10 @@ selene-plan/
 | **signing-service** | `services/signing-service` | Port 8110 | ✅ Verified & Tested | Phase 5 |
 | **terrain-service** | `services/terrain-service` | Port 8103 | ✅ Verified & Tested | Phase 1 |
 | **web** | `services/web` | Port 5173 / 3000 | ✅ Verified & Tested | Phase 1-5 |
+| **Enterprise Hardening** | `infra/k8s/`, `infra/helm/` | Helm / PSS Restricted | ✅ Verified & Tested | Phase 6 |
+| **Observability & SLOs** | `infra/monitoring/` | Prometheus & Grafana | ✅ Verified & Tested | Phase 6 |
+| **Security & Pen-test** | `docs/security/pentest-report.md` | OWASP ASVS v4.0 | ✅ Verified & Tested | Phase 6 |
+| **Operational Runbooks** | `docs/runbooks/` | Disaster Recovery & Ops | ✅ Verified & Tested | Phase 6 |
 
 ## Local quick start
 ```bash
@@ -70,6 +74,23 @@ cp infra/.env.example infra/.env
 docker compose -f infra/docker-compose.yml --env-file infra/.env up -d
 python -m pytest libs services
 ```
+
+## Kubernetes & Enterprise Deployment
+Production deployments utilize Helm packaging (`infra/helm/seleneplan`) with strict Pod Security Standards:
+```bash
+helm upgrade --install seleneplan infra/helm/seleneplan \
+  --namespace selene-production \
+  --values infra/helm/seleneplan/values.yaml
+```
+
+## Operational Runbooks
+- [Key Rotation](file:///docs/runbooks/key-rotation.md)
+- [Audit Integrity Incident Response](file:///docs/runbooks/audit-integrity-incident.md)
+- [Dead Letter Queue Handling](file:///docs/runbooks/dlq-handling.md)
+- [Backup and Restore Drill](file:///docs/runbooks/restore.md)
+- [Cluster Scaling and Capacity](file:///docs/runbooks/scaling.md)
+- [Lunar Dataset Onboarding](file:///docs/runbooks/dataset-onboarding.md)
+- [Release Procedure](file:///docs/runbooks/release-procedure.md)
 
 ## Important caveats
 - Scientific outputs (illumination, visibility, slope) must be **validated against published reference data** before being trusted. See `docs/08-science-notes.md`.

@@ -1,0 +1,116 @@
+# Default-deny NetworkPolicy for SelenePlan production namespace
+# Enforces zero-trust isolation across all pods by default (C-NET-1, T1)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: selene
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# Ingestion Egress Allowlist Policy
+# Restricts outbound internet requests to approved NASA/USGS host endpoints only.
+# Strictly denies RFC 1918 private network ranges and cloud instance metadata (169.254.169.254).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ingestion-egress-allowlist
+  namespace: selene
+spec:
+  podSelector:
+    matchLabels:
+      app: ingestion-service
+  policyTypes:
+    - Egress
+  egress:
+    # 1. Allow DNS resolution inside cluster
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # 2. Allow MinIO object storage within cluster
+    - to:
+        - podSelector:
+            matchLabels:
+              app: minio
+      ports:
+        - protocol: TCP
+          port: 9000
+
+    # 3. Allow Kafka broker within cluster
+    - to:
+        - podSelector:
+            matchLabels:
+              app: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+
+    # 4. Outbound HTTPS traffic to public internet ONLY (excluding private IP ranges)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+              - 127.0.0.0/8
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Inter-Service Routing Policy
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-internal-routing
+  namespace: selene
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow Gateway to route to API services
+    - from:
+        - podSelector:
+            matchLabels:
+              app: gateway
+      ports:
+        - protocol: TCP
+          port: 8100
+        - protocol: TCP
+          port: 8101
+        - protocol: TCP
+          port: 8102
+        - protocol: TCP
+          port: 8103
+        - protocol: TCP
+          port: 8104
+        - protocol: TCP
+          port: 8105
+        - protocol: TCP
+          port: 8106
+        - protocol: TCP
+          port: 8107
+        - protocol: TCP
+          port: 8108
+        - protocol: TCP
+          port: 8110
+        - protocol: TCP
+          port: 8111
+    # Allow Prometheus scraping
+    - from:
+        - podSelector:
+            matchLabels:
+              app: prometheus

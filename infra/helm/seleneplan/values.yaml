@@ -1,0 +1,132 @@
+global:
+  namespace: selene
+  imageRegistry: ghcr.io/astradev-labs/seleneplan
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+security:
+  podSecurityStandard: restricted
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+
+services:
+  gateway:
+    name: gateway
+    port: 8000
+    replicas: 3
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  projectService:
+    name: project-service
+    port: 8101
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+  plannerService:
+    name: planner-service
+    port: 8107
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+
+  signingService:
+    name: signing-service
+    port: 8110
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 512Mi
+
+  reportService:
+    name: report-service
+    port: 8108
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+
+  hazardMlService:
+    name: hazard-ml-service
+    port: 8104
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  illuminationService:
+    name: illumination-service
+    port: 8105
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+
+  commsService:
+    name: comms-service
+    port: 8106
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+  terrainService:
+    name: terrain-service
+    port: 8103
+    replicas: 2
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: 2000m
+        memory: 2Gi
+
+  provenanceService:
+    name: provenance-service
+    port: 8111
+    replicas: 2
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi

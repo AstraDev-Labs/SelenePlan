@@ -1,0 +1,72 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Audit Chain Status",
+      "type": "stat",
+      "targets": [{ "expr": "selene_audit_chain_valid", "refId": "A" }],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 },
+      "id": 2,
+      "title": "API Request Rate (RPS)",
+      "type": "stat",
+      "targets": [{ "expr": "sum(rate(http_requests_total[1m]))", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 },
+      "id": 3,
+      "title": "p95 API Latency (ms)",
+      "type": "gauge",
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) * 1000", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 },
+      "id": 4,
+      "title": "DLQ Messages Pending",
+      "type": "stat",
+      "targets": [{ "expr": "sum(selene_dlq_messages_total)", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 5,
+      "title": "Kafka Consumer Lag per Topic",
+      "type": "timeseries",
+      "targets": [{ "expr": "kafka_consumergroup_lag{topic=~\"selene.*\"}", "refId": "A" }]
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 6,
+      "title": "HTTP Error Rate (4xx / 5xx)",
+      "type": "timeseries",
+      "targets": [{ "expr": "sum(rate(http_requests_total{status=~\"[45]..\"}[1m])) by (status)", "refId": "A" }]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "tags": ["seleneplan", "slo", "production"],
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "SelenePlan Mission Platform Overview",
+  "version": 1
+}

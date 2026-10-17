@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: seleneplan-api-pdb
+  namespace: "{{ .Values.global.namespace }}"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      tier: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: seleneplan-worker-pdb
+  namespace: "{{ .Values.global.namespace }}"
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      tier: worker

@@ -1,0 +1,58 @@
+# Prometheus Alerting Rules for SelenePlan Mission Operations
+# Implements SLO monitors, security alerts, and pipeline health checks
+groups:
+  - name: seleneplan.security.alerts
+    rules:
+      - alert: AuditChainTamperDetected
+        expr: selene_audit_chain_valid == 0
+        for: 0m
+        labels:
+          severity: critical
+          tier: security
+        annotations:
+          summary: "CRITICAL: Audit log cryptographic hash chain broken"
+          description: "An audit row hash does not match its predecessor SHA-256 digest. Possible unauthorized database tampering!"
+          runbook: "docs/runbooks/audit-integrity-incident.md"
+
+      - alert: AuthAnomalySpike
+        expr: sum(rate(http_requests_total{status=~"401|403"}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          tier: security
+        annotations:
+          summary: "Unauthorized access anomaly detected (>5% failure rate)"
+          description: "Elevated rate of 401 Unauthorized or 403 Forbidden responses. Investigate potential brute-force or token exhaustion."
+
+  - name: seleneplan.pipeline.alerts
+    rules:
+      - alert: DLQMessageGrowth
+        expr: sum(increase(selene_dlq_messages_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+          tier: platform
+        annotations:
+          summary: "Dead Letter Queue is receiving unprocessable messages"
+          description: "Worker encountered fatal or poison-pill events routed to DLQ."
+          runbook: "docs/runbooks/dlq-handling.md"
+
+      - alert: PipelineStepTimeoutRate
+        expr: sum(rate(selene_step_retries_total[5m])) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+          tier: platform
+        annotations:
+          summary: "High step retry/timeout rate in orchestrator"
+          description: "Orchestrator is actively retrying pipeline steps due to worker failure or timeout."
+
+      - alert: SLOP95LatencyBreached
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{endpoint=~"/v1/.*"}[5m])) by (le)) > 0.300
+        for: 5m
+        labels:
+          severity: warning
+          tier: performance
+        annotations:
+          summary: "API Read p95 latency exceeded 300ms SLO"
+          description: "Current p95 API response duration is above the 300 ms SLA threshold."
