@@ -21,6 +21,8 @@ pythonpath = [
     "libs/selene-auth/src",
     "libs/selene-events/src",
     "libs/selene-observability/src",
+    "libs/selene-geo/src",
+    "libs/selene-testing/src",
     "services/hello-service/src",
     "services/audit-service/src",
 ]
@@ -33,6 +35,8 @@ source = [
     "libs/selene-auth/src",
     "libs/selene-events/src",
     "libs/selene-observability/src",
+    "libs/selene-geo/src",
+    "libs/selene-testing/src",
     "services/hello-service/src",
     "services/audit-service/src",
 ]
