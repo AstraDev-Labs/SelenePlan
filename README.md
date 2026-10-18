@@ -31,13 +31,6 @@ selene-plan/
   prompts/                   Antigravity prompt pack (master context + phases 0 to 7)
 ```
 
-## How to start (in Antigravity)
-1. Open this folder as the workspace.
-2. Read `AGENTS.md` and make sure Antigravity uses it as project rules (paste it into the project rules or instructions if your version does not pick it up automatically).
-3. Paste `prompts/00-master-context.md` as the first message of the first agent session.
-4. Run phases in order with `prompts/phase-0-foundation.md`, then `phase-1-terrain.md`, and so on. **Do one phase at a time and review the result before moving on.**
-5. Keep `docs/` and `services/*/SPEC.md` as the source of truth. When the design changes, update the doc in the same commit and add an ADR for significant decisions.
-
 ## Services & Platform Status
 
 | Service / Library | Directory | Port / Type | Status | Phase |
