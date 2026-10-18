@@ -174,30 +174,54 @@ function polarStereoToLatLon(xM: number, yM: number): { lat: number; lon: number
   return { lat, lon };
 }
 
-function getViridisColor(t: number): [number, number, number] {
-  const r = (68 + t * 185) | 0;
-  const g = (1 + t * 230) | 0;
-  const b = (84 - t * 47) | 0;
-  return [r, g, b];
-}
-
-function getMagmaColor(t: number): [number, number, number] {
-  const r = (t * 251) | 0;
-  const g = (t * 136) | 0;
-  const b = (4 + t * 149) | 0;
-  return [r, g, b];
-}
-
-function getTerrainRampColor(t: number): [number, number, number] {
-  if (t < 0.25) {
-    const u = t / 0.25;
-    return [34, (197 - u * 50) | 0, (94 + u * 100) | 0];
-  } else if (t < 0.6) {
-    const u = (t - 0.25) / 0.35;
-    return [(234 - u * 20) | 0, (179 + u * 20) | 0, 8];
+export function getViridisColor(t: number): [number, number, number] {
+  const c = Math.max(0, Math.min(1, t));
+  if (c < 0.25) {
+    const u = c / 0.25;
+    return [Math.round(68 + u * (59 - 68)), Math.round(1 + u * (82 - 1)), Math.round(84 + u * (139 - 84))];
+  } else if (c < 0.5) {
+    const u = (c - 0.25) / 0.25;
+    return [Math.round(59 + u * (33 - 59)), Math.round(82 + u * (145 - 82)), Math.round(139 + u * (140 - 139))];
+  } else if (c < 0.75) {
+    const u = (c - 0.5) / 0.25;
+    return [Math.round(33 + u * (94 - 33)), Math.round(145 + u * (201 - 145)), Math.round(140 + u * (98 - 140))];
   } else {
-    const u = (t - 0.6) / 0.4;
-    return [(239 + u * 16) | 0, (68 + u * 187) | 0, (68 + u * 187) | 0];
+    const u = (c - 0.75) / 0.25;
+    return [Math.round(94 + u * (253 - 94)), Math.round(201 + u * (231 - 201)), Math.round(98 + u * (37 - 98))];
+  }
+}
+
+export function getMagmaColor(t: number): [number, number, number] {
+  const c = Math.max(0, Math.min(1, t));
+  if (c < 0.25) {
+    const u = c / 0.25;
+    return [Math.round(0 + u * 81), Math.round(0 + u * 18), Math.round(4 + u * 120)];
+  } else if (c < 0.5) {
+    const u = (c - 0.25) / 0.25;
+    return [Math.round(81 + u * (182 - 81)), Math.round(18 + u * (54 - 18)), Math.round(124 + u * (121 - 124))];
+  } else if (c < 0.75) {
+    const u = (c - 0.5) / 0.25;
+    return [Math.round(182 + u * (251 - 182)), Math.round(54 + u * (136 - 54)), Math.round(121 + u * (97 - 121))];
+  } else {
+    const u = (c - 0.75) / 0.25;
+    return [Math.round(251 + u * (252 - 251)), Math.round(136 + u * (253 - 136)), Math.round(97 + u * (191 - 97))];
+  }
+}
+
+export function getTerrainRampColor(t: number): [number, number, number] {
+  const c = Math.max(0, Math.min(1, t));
+  if (c < 0.2) {
+    const u = c / 0.2;
+    return [Math.round(30 + u * (5 - 30)), Math.round(58 + u * (150 - 58)), Math.round(138 + u * (105 - 138))];
+  } else if (c < 0.4) {
+    const u = (c - 0.2) / 0.2;
+    return [Math.round(5 + u * (234 - 5)), Math.round(150 + u * (179 - 150)), Math.round(105 + u * (8 - 105))];
+  } else if (c < 0.7) {
+    const u = (c - 0.4) / 0.3;
+    return [Math.round(234 + u * (220 - 234)), Math.round(179 + u * (38 - 179)), Math.round(8 + u * (38 - 8))];
+  } else {
+    const u = (c - 0.7) / 0.3;
+    return [Math.round(220 + u * (255 - 220)), Math.round(38 + u * (255 - 38)), Math.round(38 + u * (255 - 38))];
   }
 }
 
@@ -1201,8 +1225,11 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
             slope = 28.0;
             roughness = 2.0;
           } else {
-            slope = 6.0 + Math.abs(Math.sin(lon * 0.2)) * 3.5;
-            roughness = 0.55;
+            // Realistic lunar topography with multi-scale cratering and highland roughness
+            const hMod = Math.abs(Math.sin(lat * 0.08) * Math.cos(lon * 0.08));
+            const microMod = Math.abs(Math.sin(lat * 0.35 + lon * 0.35));
+            slope = 3.5 + hMod * 16.0 + microMod * 6.5;
+            roughness = Math.min(2.5, 0.2 + (slope / 28.0) * 1.5);
           }
 
           earthVis = lon >= -88.0 && lon <= 88.0;
@@ -1214,14 +1241,14 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
 
         // A. Slope Map Layer
         if (layers?.showSlope) {
-          const normSlope = Math.min(1.0, slope / 45.0);
+          const normSlope = Math.min(1.0, slope / 28.0);
           const [sr, sg, sb] =
             colormap === "magma"
               ? getMagmaColor(normSlope)
               : colormap === "terrain"
               ? getTerrainRampColor(normSlope)
               : getViridisColor(normSlope);
-          r = sr; g = sg; b = sb; a = 180;
+          r = sr; g = sg; b = sb; a = 230;
         }
 
         // B. Roughness Layer (TRI)
@@ -1264,6 +1291,13 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
           const hs = Math.round(18 + hillshadeVal * 232);
           if (a === 0) {
             r = hs; g = hs; b = Math.min(255, hs + 4); a = 210;
+          } else if (layers?.showSlope) {
+            // Modulate vivid slope colormap with hillshade illumination (Hillshade Shading)
+            const shadeFactor = 0.38 + 0.62 * (hs / 255.0);
+            r = Math.min(255, Math.round(r * shadeFactor));
+            g = Math.min(255, Math.round(g * shadeFactor));
+            b = Math.min(255, Math.round(b * shadeFactor));
+            a = Math.max(a, 230);
           } else {
             r = Math.min(255, Math.round(r * 0.4 + hs * 0.6));
             g = Math.min(255, Math.round(g * 0.4 + hs * 0.6));

@@ -20,7 +20,7 @@ export const App: React.FC = () => {
   const [inspection, setInspection] = useState<PointInspection | null>(null);
 
   const [layers, setLayers] = useState<LayerState>({
-    showSlope: false,
+    showSlope: true,
     showAspect: false,
     showRoughness: false,
     showHazard: false,

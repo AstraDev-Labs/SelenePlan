@@ -110,7 +110,7 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
             layers.showSlope ? "bg-cyan-500/15 border border-cyan-500/30 text-cyan-200" : "bg-white/5 text-gray-400"
           }`}
         >
-          <span>Slope (Horn 3x3)</span>
+          <span>Slope (Horn 3x3) [{layers.colormap.toUpperCase()}]</span>
           {layers.showSlope ? <Eye className="w-3.5 h-3.5 text-cyan-400" /> : <EyeOff className="w-3.5 h-3.5 text-gray-500" />}
         </button>
 
@@ -188,20 +188,47 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
 
       {/* Colormap Selector */}
       <div className="flex flex-col gap-1.5 border-t border-white/10 pt-3">
-        <div className="flex items-center gap-1.5 text-gray-300 font-medium text-[11px]">
-          <Sliders className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
-          <label htmlFor="colormap-select">Slope Colormap</label>
+        <div className="flex items-center justify-between text-gray-300 font-medium text-[11px]">
+          <div className="flex items-center gap-1.5">
+            <Sliders className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+            <label htmlFor="colormap-select">Slope Colormap</label>
+          </div>
+          {layers.showSlope && (
+            <span className="text-[10px] text-cyan-400 font-mono bg-cyan-500/10 px-1.5 py-0.5 rounded border border-cyan-500/30">
+              ACTIVE
+            </span>
+          )}
         </div>
         <select
           id="colormap-select"
           value={layers.colormap}
-          onChange={(e) => onChange({ ...layers, colormap: e.target.value as Colormap })}
-          className="bg-gray-900 border border-white/10 rounded px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-400"
+          onChange={(e) => onChange({ ...layers, colormap: e.target.value as Colormap, showSlope: true })}
+          className="bg-gray-900 border border-white/10 rounded px-2.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-cyan-400 cursor-pointer"
         >
           <option value="viridis">Viridis (Perceptually Uniform)</option>
           <option value="magma">Magma (High Contrast)</option>
           <option value="terrain">Lunar Terrain Ramp</option>
         </select>
+
+        {/* Dynamic Gradient Legend Bar */}
+        <div className="flex flex-col gap-1 mt-1">
+          <div
+            className="h-2.5 rounded w-full border border-white/20 shadow-inner"
+            style={{
+              background:
+                layers.colormap === "magma"
+                  ? "linear-gradient(to right, #000004 0%, #51127c 25%, #b63679 50%, #fb8861 75%, #fcfdbf 100%)"
+                  : layers.colormap === "terrain"
+                  ? "linear-gradient(to right, #1e3a8a 0%, #059669 20%, #eab308 40%, #dc2626 70%, #ffffff 100%)"
+                  : "linear-gradient(to right, #440154 0%, #3b528b 25%, #21918c 50%, #5ec962 75%, #fde725 100%)",
+            }}
+          />
+          <div className="flex justify-between text-[9px] text-gray-400 font-mono">
+            <span>0° (Flat)</span>
+            <span>15° (Nominal)</span>
+            <span>28°+ (Steep)</span>
+          </div>
+        </div>
       </div>
 
       {/* Threshold Slider */}

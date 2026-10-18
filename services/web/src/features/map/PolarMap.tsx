@@ -333,11 +333,16 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           b = Math.round(rb * trAlpha + b * (1 - trAlpha));
         }
 
-        // 2. Slope Map (Viridis / Magma)
+        // 2. Slope Map (Viridis / Magma / Terrain Ramp)
         if (layers.showSlope) {
-          const normSlope = Math.min(1.0, slope / 45.0);
-          const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
-          const slAlpha = 0.60;
+          const normSlope = Math.min(1.0, slope / 28.0);
+          const [sr, sg, sb] =
+            layers.colormap === "magma"
+              ? getMagmaColor(normSlope)
+              : layers.colormap === "terrain"
+              ? getTerrainRampColor(normSlope)
+              : getViridisColor(normSlope);
+          const slAlpha = 0.75;
           r = Math.round(sr * slAlpha + r * (1 - slAlpha));
           g = Math.round(sg * slAlpha + g * (1 - slAlpha));
           b = Math.round(sb * slAlpha + b * (1 - slAlpha));
@@ -913,19 +918,56 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   );
 };
 
-// Fast Colormaps
+// Scientific Multi-Stop Colormaps
 function getViridisColor(t: number): [number, number, number] {
-  const r = (68 + t * 185) | 0;
-  const g = (1 + t * 230) | 0;
-  const b = (84 - t * 47) | 0;
-  return [r, g, b];
+  const c = Math.max(0, Math.min(1, t));
+  if (c < 0.25) {
+    const u = c / 0.25;
+    return [Math.round(68 + u * (59 - 68)), Math.round(1 + u * (82 - 1)), Math.round(84 + u * (139 - 84))];
+  } else if (c < 0.5) {
+    const u = (c - 0.25) / 0.25;
+    return [Math.round(59 + u * (33 - 59)), Math.round(82 + u * (145 - 82)), Math.round(139 + u * (140 - 139))];
+  } else if (c < 0.75) {
+    const u = (c - 0.5) / 0.25;
+    return [Math.round(33 + u * (94 - 33)), Math.round(145 + u * (201 - 145)), Math.round(140 + u * (98 - 140))];
+  } else {
+    const u = (c - 0.75) / 0.25;
+    return [Math.round(94 + u * (253 - 94)), Math.round(201 + u * (231 - 201)), Math.round(98 + u * (37 - 98))];
+  }
 }
 
 function getMagmaColor(t: number): [number, number, number] {
-  const r = (t * 251) | 0;
-  const g = (t * 136) | 0;
-  const b = (4 + t * 149) | 0;
-  return [r, g, b];
+  const c = Math.max(0, Math.min(1, t));
+  if (c < 0.25) {
+    const u = c / 0.25;
+    return [Math.round(0 + u * 81), Math.round(0 + u * 18), Math.round(4 + u * 120)];
+  } else if (c < 0.5) {
+    const u = (c - 0.25) / 0.25;
+    return [Math.round(81 + u * (182 - 81)), Math.round(18 + u * (54 - 18)), Math.round(124 + u * (121 - 124))];
+  } else if (c < 0.75) {
+    const u = (c - 0.5) / 0.25;
+    return [Math.round(182 + u * (251 - 182)), Math.round(54 + u * (136 - 54)), Math.round(121 + u * (97 - 121))];
+  } else {
+    const u = (c - 0.75) / 0.25;
+    return [Math.round(251 + u * (252 - 251)), Math.round(136 + u * (253 - 136)), Math.round(97 + u * (191 - 97))];
+  }
+}
+
+function getTerrainRampColor(t: number): [number, number, number] {
+  const c = Math.max(0, Math.min(1, t));
+  if (c < 0.2) {
+    const u = c / 0.2;
+    return [Math.round(30 + u * (5 - 30)), Math.round(58 + u * (150 - 58)), Math.round(138 + u * (105 - 138))];
+  } else if (c < 0.4) {
+    const u = (c - 0.2) / 0.2;
+    return [Math.round(5 + u * (234 - 5)), Math.round(150 + u * (179 - 150)), Math.round(105 + u * (8 - 105))];
+  } else if (c < 0.7) {
+    const u = (c - 0.4) / 0.3;
+    return [Math.round(234 + u * (220 - 234)), Math.round(179 + u * (38 - 179)), Math.round(8 + u * (38 - 8))];
+  } else {
+    const u = (c - 0.7) / 0.3;
+    return [Math.round(220 + u * (255 - 220)), Math.round(38 + u * (255 - 38)), Math.round(38 + u * (255 - 38))];
+  }
 }
 
 // Terrain Ruggedness Index (TRI) Colormap
