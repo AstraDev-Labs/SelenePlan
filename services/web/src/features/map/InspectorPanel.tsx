@@ -57,9 +57,14 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
           <Crosshair className="w-4 h-4 text-cyan-400" aria-hidden="true" />
           <span>Point Inspector</span>
         </div>
-        {inspection.feature_name && (
-          <span className="badge badge-cyan text-[10px]">{inspection.feature_name}</span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {inspection.feature_name && (
+            <span className="badge badge-cyan text-[10px]">{inspection.feature_name}</span>
+          )}
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-semibold">
+            PINNED
+          </span>
+        </div>
       </div>
 
       {/* Fused Hazard Status Flag */}

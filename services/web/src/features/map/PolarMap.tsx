@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { LayerState } from "./LayerControl";
 import { PointInspection } from "./InspectorPanel";
-import { ZoomIn, ZoomOut, RotateCcw, Navigation2, Compass, MapPin } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Navigation2, Compass, MapPin, Target, X } from "lucide-react";
 
 interface PolarMapProps {
   layers: LayerState;
@@ -41,6 +41,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [cursorHud, setCursorHud] = useState<{ xM: number; yM: number; elev: number; slope: number; lat: number; lon: number } | null>(null);
+
+  // Click-to-Pin Inspection State
+  const [pinnedPoint, setPinnedPoint] = useState<{ xM: number; yM: number; elev: number; slope: number } | null>(null);
+  const pinnedInspectionRef = useRef<PointInspection | null>(null);
+  const dragDistanceRef = useRef<number>(0);
 
   const dashOffsetRef = useRef<number>(0);
   const rafIdRef = useRef<number | null>(null);
@@ -131,6 +136,60 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     return dist >= 1850.0;
   }, []);
 
+  // Compute full PointInspection payload for any lunar coordinate (xM, yM)
+  const computePointInspection = useCallback((xM: number, yM: number): PointInspection => {
+    const slope = getSlopeAt(xM, yM);
+    const elev = getElevationAt(xM, yM);
+    const distM = Math.sqrt(xM * xM + yM * yM);
+    const lat = 90.0 - distM / 30300.0;
+    const lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
+    const lit = isPointLit(xM, yM, currentStep);
+    const earthVis = isPointEarthVisible(xM, yM);
+    const isPSR = distM < 1850.0;
+    const mlHazard = getMLHazardAt(xM, yM);
+    const isTerrainHazard = slope > layers.maxSlopeLimit;
+    const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
+    const isFusedHazard = isTerrainHazard || isMLHazard;
+
+    const delta = 30.0;
+    const zE = getElevationAt(xM + delta, yM);
+    const zW = getElevationAt(xM - delta, yM);
+    const zN = getElevationAt(xM, yM + delta);
+    const zS = getElevationAt(xM, yM - delta);
+    const tri = (Math.abs(zE - elev) + Math.abs(zW - elev) + Math.abs(zN - elev) + Math.abs(zS - elev)) * 0.25;
+
+    const sunSeries = Array.from({ length: 48 }, (_, t) => isPointLit(xM, yM, t));
+    const earthSeries = Array.from({ length: 48 }, () => earthVis);
+    const litCount = sunSeries.filter(Boolean).length;
+    const litFrac = isPSR ? 0.0 : litCount / sunSeries.length;
+
+    return {
+      x_m: xM,
+      y_m: yM,
+      lat_deg: lat,
+      lon_deg: lon >= 0 ? lon : lon + 360,
+      elevation_m: elev,
+      slope_deg: slope,
+      aspect_deg: (Math.atan2(xM, yM) * 180.0) / Math.PI,
+      roughness_m: tri,
+      is_hazard: isTerrainHazard,
+      feature_name: distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge",
+      is_lit: lit,
+      lit_fraction: litFrac,
+      longest_dark_hours: isPSR ? 708.0 : (1.0 - litFrac) * 48.0,
+      is_psr: isPSR,
+      time_series: sunSeries,
+      earth_visible: earthVis,
+      earth_elevation_deg: 2.37,
+      earth_visible_fraction: isPSR ? 0.0 : 0.88,
+      longest_blackout_hours: isPSR ? 708.0 : 12.0,
+      earth_series: earthSeries,
+      ml_hazard_detected: mlHazard.detected,
+      ml_confidence: mlHazard.confidence,
+      fused_hazard: isFusedHazard,
+    };
+  }, [currentStep, getElevationAt, getMLHazardAt, getSlopeAt, isPointEarthVisible, isPointLit, layers.maxSlopeLimit, layers.mlConfidenceThreshold]);
+
   // =========================================================================
   // Compute & Cache Terrain Raster: Fully implements Hillshade, Roughness, Slope
   // =========================================================================
@@ -200,7 +259,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const directShade = dot > 0 ? dot : 0;
         const isPSR = distM < 1850.0;
         const ambient = isPSR ? 0.02 : 0.12;
-        // High contrast lunar hillshade value [0.0 to 1.0]
         const shade = Math.min(1.0, ambient + directShade * 0.88);
 
         // Terrain Ruggedness Index (TRI) - Micro-relief deviation
@@ -211,20 +269,17 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
         // 1. DEM Hillshade Layer Active
         if (layers.showHillshade) {
-          // Authentic photographic lunar regolith shaded relief
           const hsIntensity = Math.round(18 + shade * 225);
           r = hsIntensity;
           g = hsIntensity;
           b = Math.min(255, hsIntensity + (isPSR ? 8 : 4));
 
-          // Anorthosite rim highlight
           if (elev > -850) {
             r = Math.min(255, r + 16);
             g = Math.min(255, g + 16);
             b = Math.min(255, b + 20);
           }
 
-          // Deep inky shadow inside PSR floor
           if (isPSR) {
             r = Math.round(10 + shade * 15);
             g = Math.round(14 + shade * 20);
@@ -237,7 +292,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         let hasThematic = false;
 
         if (layers.showRoughness && layers.showSlope) {
-          // Both Roughness and Slope active: 50/50 composite
           hasThematic = true;
           const normSlope = Math.min(1.0, slope / 45.0);
           const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
@@ -249,7 +303,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           thematicG = Math.round(sg * 0.5 + rg * 0.5);
           thematicB = Math.round(sb * 0.5 + rb * 0.5);
         } else if (layers.showRoughness) {
-          // Roughness (TRI) active
           hasThematic = true;
           const normTRI = Math.min(1.0, tri / 2.2);
           const [rr, rg, rb] = getRoughnessColor(normTRI);
@@ -257,7 +310,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           thematicG = rg;
           thematicB = rb;
         } else if (layers.showSlope) {
-          // Slope active
           hasThematic = true;
           const normSlope = Math.min(1.0, slope / 45.0);
           const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
@@ -266,16 +318,13 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           thematicB = sb;
         }
 
-        // Blend Thematic Heatmaps over Hillshade or Base
         if (hasThematic) {
           if (layers.showHillshade) {
-            // Modulate with Hillshade 3D relief: hills pop out in full 3D!
             const reliefMult = 0.32 + 0.68 * shade;
             r = Math.round(thematicR * reliefMult);
             g = Math.round(thematicG * reliefMult);
             b = Math.round(thematicB * reliefMult);
           } else {
-            // Flat pure colormap
             r = thematicR;
             g = thematicG;
             b = thematicB;
@@ -286,14 +335,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         if (layers.showIllumination) {
           const lit = isPointLit(xM, yM, currentStep);
           if (lit) {
-            // Warm solar catch-points
             r = Math.min(255, Math.round(r * 1.15 + 40));
             g = Math.min(255, Math.round(g * 1.12 + 30));
             b = Math.min(255, Math.round(b * 0.95));
           } else if (!hasThematic) {
-            // Darkened shadow zones
             r = Math.round(r * 0.45);
-            g = Math.round(g * 0.45);
+            g = Math.round(r * 0.45);
             b = Math.round(b * 0.55);
           }
         }
@@ -318,7 +365,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           b = Math.round(b * 0.35 + 140);
         }
 
-        // 6. Hazard Overlays (Fused, Slope, or ML)
+        // 6. Hazard Overlays
         const isTerrainHazard = slope > layers.maxSlopeLimit;
         const mlHazard = getMLHazardAt(xM, yM);
         const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
@@ -485,6 +532,66 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     }
     ctx.restore();
 
+    // =======================================================================
+    // DRAW PINNED INSPECTION RETICLE (Target Lock Marker)
+    // =======================================================================
+    if (pinnedPoint) {
+      const pinPx = pinnedPoint.xM / scale;
+      const pinPy = -pinnedPoint.yM / scale;
+
+      ctx.save();
+      // Outer Target Halo (Animated Pulse)
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(pinPx, pinPy, 14, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Center Bullseye Ring
+      ctx.fillStyle = "rgba(34, 211, 238, 0.25)";
+      ctx.beginPath();
+      ctx.arc(pinPx, pinPy, 7, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pinPx, pinPy, 7, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Precision Center Dot
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(pinPx, pinPy, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cardinal Target Ticks
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(pinPx - 20, pinPy); ctx.lineTo(pinPx - 10, pinPy);
+      ctx.moveTo(pinPx + 10, pinPy); ctx.lineTo(pinPx + 20, pinPy);
+      ctx.moveTo(pinPx, pinPy - 20); ctx.lineTo(pinPx, pinPy - 10);
+      ctx.moveTo(pinPx, pinPy + 10); ctx.lineTo(pinPx, pinPy + 20);
+      ctx.stroke();
+
+      // Target Coordinate Badge
+      ctx.fillStyle = "rgba(8, 14, 26, 0.95)";
+      ctx.strokeStyle = "#22d3ee";
+      ctx.lineWidth = 1;
+      ctx.font = "bold 10px 'JetBrains Mono', monospace";
+      const pinText = `INSPECTED: (${Math.round(pinnedPoint.xM)}m, ${Math.round(pinnedPoint.yM)}m | ${Math.round(pinnedPoint.elev)}m)`;
+      const ptw = ctx.measureText(pinText).width;
+      ctx.fillRect(pinPx - ptw / 2 - 6, pinPy - 36, ptw + 12, 18);
+      ctx.strokeRect(pinPx - ptw / 2 - 6, pinPy - 36, ptw + 12, 18);
+
+      ctx.fillStyle = "#67e8f9";
+      ctx.fillText(pinText, pinPx - ptw / 2, pinPy - 23);
+      ctx.restore();
+    }
+
     // Feature Labels
     ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     ctx.font = "bold 12px 'Space Grotesk', sans-serif";
@@ -524,12 +631,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.fillText(`SUN AZ ${sunGeom.az.toFixed(0)}°`, arrowStartX - 28, arrowStartY - 10);
 
     ctx.restore();
-  }, [pan, zoom, layers, currentStep, getSunGeometryAt]);
+  }, [pan, zoom, layers, currentStep, pinnedPoint, getSunGeometryAt]);
 
-  // Redraw when pan or zoom changes
+  // Redraw when pan, zoom, or pinnedPoint changes
   useEffect(() => {
     renderScene();
-  }, [pan, zoom, renderScene]);
+  }, [pan, zoom, pinnedPoint, renderScene]);
 
   // 60fps Route Animation Loop
   useEffect(() => {
@@ -548,6 +655,44 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     };
   }, [renderScene]);
 
+  // =========================================================================
+  // Canvas Click Handler: PINS inspected terrain pixel permanently!
+  // =========================================================================
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // If the mouse dragged more than 5px, it was a pan operation, not a click
+    if (dragDistanceRef.current > 5) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+
+    const scale = (EXTENT_M * 2) / canvas.width;
+    const dx = (px - (canvas.width / 2 + pan.x)) / zoom;
+    const dy = (py - (canvas.height / 2 + pan.y)) / zoom;
+    const xM = dx * scale;
+    const yM = -dy * scale;
+
+    const inspection = computePointInspection(xM, yM);
+    setPinnedPoint({
+      xM,
+      yM,
+      elev: inspection.elevation_m,
+      slope: inspection.slope_deg,
+    });
+    pinnedInspectionRef.current = inspection;
+    onInspect(inspection);
+  };
+
+  // Clear pinned target inspection
+  const handleClearPin = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedPoint(null);
+    pinnedInspectionRef.current = null;
+    onInspect(null);
+  };
+
   // Throttled Point Inspector on MouseMove
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -557,9 +702,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const py = e.clientY - rect.top;
 
     if (isDragging) {
+      const dX = px - dragStart.x;
+      const dY = py - dragStart.y;
+      dragDistanceRef.current += Math.hypot(dX, dY);
       setPan({
-        x: pan.x + (px - dragStart.x),
-        y: pan.y + (py - dragStart.y),
+        x: pan.x + dX,
+        y: pan.y + dY,
       });
       setDragStart({ x: px, y: py });
       return;
@@ -580,20 +728,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       const distM = Math.sqrt(xM * xM + yM * yM);
       const lat = 90.0 - distM / 30300.0;
       const lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
-      const lit = isPointLit(xM, yM, currentStep);
-      const earthVis = isPointEarthVisible(xM, yM);
-      const isPSR = distM < 1850.0;
-      const mlHazard = getMLHazardAt(xM, yM);
-      const isTerrainHazard = slope > layers.maxSlopeLimit;
-      const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
-      const isFusedHazard = isTerrainHazard || isMLHazard;
-
-      const delta = 30.0;
-      const zE = getElevationAt(xM + delta, yM);
-      const zW = getElevationAt(xM - delta, yM);
-      const zN = getElevationAt(xM, yM + delta);
-      const zS = getElevationAt(xM, yM - delta);
-      const tri = (Math.abs(zE - elev) + Math.abs(zW - elev) + Math.abs(zN - elev) + Math.abs(zS - elev)) * 0.25;
 
       setCursorHud({
         xM: Math.round(xM),
@@ -604,36 +738,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         lon: Math.round((lon >= 0 ? lon : lon + 360) * 10) / 10,
       });
 
-      const sunSeries = Array.from({ length: 48 }, (_, t) => isPointLit(xM, yM, t));
-      const earthSeries = Array.from({ length: 48 }, () => earthVis);
-      const litCount = sunSeries.filter(Boolean).length;
-      const litFrac = isPSR ? 0.0 : litCount / sunSeries.length;
-
-      onInspect({
-        x_m: xM,
-        y_m: yM,
-        lat_deg: lat,
-        lon_deg: lon >= 0 ? lon : lon + 360,
-        elevation_m: elev,
-        slope_deg: slope,
-        aspect_deg: (Math.atan2(xM, yM) * 180.0) / Math.PI,
-        roughness_m: tri,
-        is_hazard: isTerrainHazard,
-        feature_name: distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge",
-        is_lit: lit,
-        lit_fraction: litFrac,
-        longest_dark_hours: isPSR ? 708.0 : (1.0 - litFrac) * 48.0,
-        is_psr: isPSR,
-        time_series: sunSeries,
-        earth_visible: earthVis,
-        earth_elevation_deg: 2.37,
-        earth_visible_fraction: isPSR ? 0.0 : 0.88,
-        longest_blackout_hours: isPSR ? 708.0 : 12.0,
-        earth_series: earthSeries,
-        ml_hazard_detected: mlHazard.detected,
-        ml_confidence: mlHazard.confidence,
-        fused_hazard: isFusedHazard,
-      });
+      // If no point is pinned, hover inspects terrain live
+      if (!pinnedInspectionRef.current) {
+        const liveInspection = computePointInspection(xM, yM);
+        onInspect(liveInspection);
+      }
     });
   };
 
@@ -647,9 +756,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           ref={canvasRef}
           width={880}
           height={600}
+          onClick={handleCanvasClick}
           onMouseMove={handleMouseMove}
           onMouseDown={(e) => {
             setIsDragging(true);
+            dragDistanceRef.current = 0;
             const rect = e.currentTarget.getBoundingClientRect();
             setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
           }}
@@ -657,7 +768,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           onMouseLeave={() => {
             setIsDragging(false);
             setCursorHud(null);
-            onInspect(null);
+            // If user has a pinned point, PRESERVE IT when mouse leaves canvas!
+            if (pinnedInspectionRef.current) {
+              onInspect(pinnedInspectionRef.current);
+            } else {
+              onInspect(null);
+            }
           }}
           style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair" }}
           aria-label="2D Lunar South Pole Polar Map"
@@ -709,9 +825,34 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           </button>
         </div>
 
-        {/* Bottom-Left: Live Real-Time Cursor HUD */}
-        <div className="absolute bottom-4 left-4 glass-panel px-3 py-2 text-xs font-mono flex items-center gap-4 pointer-events-none">
-          {cursorHud ? (
+        {/* Bottom-Left: Live Real-Time Cursor HUD & Pinned Target Indicator */}
+        <div className="absolute bottom-4 left-4 glass-panel px-3 py-2 text-xs font-mono flex items-center gap-4">
+          {pinnedPoint ? (
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-cyan-300 font-bold">
+                <Target className="w-4 h-4 text-cyan-400 animate-pulse" />
+                <span>PINNED TARGET LOCKED:</span>
+              </div>
+              <div className="text-gray-300">
+                X: <strong className="text-white">{Math.round(pinnedPoint.xM)}m</strong> | Y:{" "}
+                <strong className="text-white">{Math.round(pinnedPoint.yM)}m</strong>
+              </div>
+              <div className="text-emerald-300 font-bold">
+                Elev: {Math.round(pinnedPoint.elev)}m
+              </div>
+              <div className="text-sky-300">
+                Slope: {pinnedPoint.slope.toFixed(1)}°
+              </div>
+              <button
+                onClick={handleClearPin}
+                title="Unpin / Reset Inspector"
+                className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/10 hover:bg-rose-500/20 text-gray-300 hover:text-rose-300 transition-colors border border-white/20 text-[10px]"
+              >
+                <X className="w-3 h-3" />
+                <span>UNPIN</span>
+              </button>
+            </div>
+          ) : cursorHud ? (
             <>
               <div className="flex items-center gap-1.5 text-sky-300">
                 <Navigation2 className="w-3.5 h-3.5 text-sky-400" />
@@ -732,11 +873,14 @@ export const PolarMap: React.FC<PolarMapProps> = ({
                   {cursorHud.slope}°
                 </strong>
               </div>
+              <span className="text-[10px] text-cyan-400/80 font-sans italic ml-1">
+                (Click map to pin inspection)
+              </span>
             </>
           ) : (
             <div className="flex items-center gap-2 text-gray-400 text-[11px]">
               <MapPin className="w-3.5 h-3.5 text-sky-400/60" />
-              <span>Pan with drag • Hover cursor to inspect point elevation and traversability</span>
+              <span>Click anywhere on map to inspect & lock pixel terrain • Pan with drag</span>
             </div>
           )}
         </div>
