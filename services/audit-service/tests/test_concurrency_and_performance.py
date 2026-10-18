@@ -94,10 +94,8 @@ async def test_ac1_and_ac8_concurrency_and_throughput() -> None:
         f"\n[BENCHMARK RESULT] Appended {total_events} events concurrently in {elapsed_s:.3f}s: {throughput:.1f} events/s"
     )
 
-    # Assert AC 8: Throughput target >= 200 ev/s (with tolerance for Windows virtualized container latency)
-    assert (
-        throughput >= 120.0
-    ), f"Sustained throughput {throughput:.1f} ev/s is below target 120 ev/s (elapsed: {elapsed_s:.3f}s)"
+    t_msg = f"Sustained throughput {throughput:.1f} ev/s is below target 120 ev/s (elapsed: {elapsed_s:.3f}s)"
+    assert throughput >= 120.0, t_msg
 
     # Fetch all rows strictly ordered by sequence
     async with session_factory() as session:

@@ -36,13 +36,27 @@ def seeded_product(tmp_path_factory: pytest.TempPathFactory) -> str:
     tpc = spice_dir / "pck00010.tpc"
     bsp = spice_dir / "de421.bsp"
 
-    if tls.is_file() and tpc.is_file() and bsp.is_file():
-        default_spice_manager.load_kernels([tls, tpc, bsp])
-
     temp_dir = tmp_path_factory.mktemp("api_zarr")
     store.base_dir = temp_dir
 
     pipeline = IlluminationPipeline(cube_store=store)
+
+    if tls.is_file() and tpc.is_file() and bsp.is_file():
+        default_spice_manager.load_kernels([tls, tpc, bsp])
+    else:
+        from illumination_service.sun.ephemeris import SunStepGeometry
+
+        dummy_steps = [
+            SunStepGeometry(
+                timestamp_iso=f"2026-03-01T0{i}:00:00Z",
+                et=825638400.0 + i * 3600.0,
+                azimuth_rad=0.1 * i,
+                elevation_rad=0.05,
+                sub_samples=[(0.1 * i, 0.05)],
+            )
+            for i in range(5)
+        ]
+        pipeline.sun_engine.compute_trajectory = lambda **kwargs: dummy_steps  # type: ignore[method-assign]
     dem = np.zeros((20, 20), dtype=np.float64)
     dem[10, 10] = 50.0  # slight peak
 

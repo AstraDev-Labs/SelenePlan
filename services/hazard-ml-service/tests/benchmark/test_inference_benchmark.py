@@ -12,9 +12,14 @@ def test_cpu_inference_throughput_benchmark() -> None:
         Path(__file__).resolve().parent.parent.parent / "model-cards" / "crater_detector_v1.onnx"
     )
     if not onnx_path.exists():
-        from hazard_ml_service.training.export_onnx import build_crater_onnx_model
+        import importlib.util
 
-        build_crater_onnx_model(onnx_path)
+        export_script = onnx_path.parent.parent / "training" / "export_onnx.py"
+        spec = importlib.util.spec_from_file_location("export_onnx", export_script)
+        if spec and spec.loader:
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            mod.build_crater_onnx_model(onnx_path)
 
     session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
 

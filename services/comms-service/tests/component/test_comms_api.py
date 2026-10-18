@@ -47,21 +47,14 @@ def seeded_comms_product(tmp_path_factory: pytest.TempPathFactory) -> str:
 
         dummy_steps = [
             EarthStepGeometry(
-                timestamp_iso="2026-03-01T00:00:00Z",
-                et=825638400.0,
-                azimuth_rad=0.1,
-                elevation_rad=0.05,
+                timestamp_iso=f"2026-03-01T0{i}:00:00Z",
+                et=825638400.0 + i * 3600.0,
+                azimuth_rad=0.1 + 0.05 * i,
+                elevation_rad=0.05 + 0.01 * i,
                 distance_km=384400.0,
                 light_time_s=1.28,
-            ),
-            EarthStepGeometry(
-                timestamp_iso="2026-03-01T01:00:00Z",
-                et=825642000.0,
-                azimuth_rad=0.15,
-                elevation_rad=0.06,
-                distance_km=384400.0,
-                light_time_s=1.28,
-            ),
+            )
+            for i in range(5)
         ]
         pipeline.earth_engine.compute_trajectory = lambda **kwargs: dummy_steps  # type: ignore[method-assign]
 
