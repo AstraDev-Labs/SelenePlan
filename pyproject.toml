@@ -18,6 +18,7 @@ mypy_path = [
     "libs/selene-events/src",
     "libs/selene-observability/src",
     "libs/selene-geo/src",
+    "libs/selene-horizon/src",
     "libs/selene-testing/src",
     "services/hello-service/src",
     "services/audit-service/src",
@@ -44,6 +45,7 @@ module = [
     "zarr.*",
     "spiceypy.*",
     "selene_horizon.*",
+    "PIL.*",
 ]
 ignore_missing_imports = true
 
@@ -56,6 +58,7 @@ pythonpath = [
     "libs/selene-events/src",
     "libs/selene-observability/src",
     "libs/selene-geo/src",
+    "libs/selene-horizon/src",
     "libs/selene-testing/src",
     "services/hello-service/src",
     "services/audit-service/src",

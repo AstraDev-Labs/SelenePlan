@@ -35,14 +35,36 @@ def seeded_comms_product(tmp_path_factory: pytest.TempPathFactory) -> str:
     tls = spice_dir / "naif0012.tls"
     tpc = spice_dir / "pck00010.tpc"
     bsp = spice_dir / "de421.bsp"
-
-    if tls.is_file() and tpc.is_file() and bsp.is_file():
-        default_spice_manager.load_kernels([tls, tpc, bsp])
-
     temp_dir = tmp_path_factory.mktemp("comms_api_zarr")
     store.base_dir = temp_dir
 
     pipeline = CommsPipeline(cube_store=store)
+
+    if tls.is_file() and tpc.is_file() and bsp.is_file():
+        default_spice_manager.load_kernels([tls, tpc, bsp])
+    else:
+        from comms_service.earth.ephemeris import EarthStepGeometry
+
+        dummy_steps = [
+            EarthStepGeometry(
+                timestamp_iso="2026-03-01T00:00:00Z",
+                et=825638400.0,
+                azimuth_rad=0.1,
+                elevation_rad=0.05,
+                distance_km=384400.0,
+                light_time_s=1.28,
+            ),
+            EarthStepGeometry(
+                timestamp_iso="2026-03-01T01:00:00Z",
+                et=825642000.0,
+                azimuth_rad=0.15,
+                elevation_rad=0.06,
+                distance_km=384400.0,
+                light_time_s=1.28,
+            ),
+        ]
+        pipeline.earth_engine.compute_trajectory = lambda **kwargs: dummy_steps  # type: ignore[method-assign]
+
     dem = np.zeros((20, 20), dtype=np.float64)
 
     prod_id, _ = pipeline.run_analysis(

@@ -11,6 +11,11 @@ def test_cpu_inference_throughput_benchmark() -> None:
     onnx_path = (
         Path(__file__).resolve().parent.parent.parent / "model-cards" / "crater_detector_v1.onnx"
     )
+    if not onnx_path.exists():
+        from hazard_ml_service.training.export_onnx import build_crater_onnx_model
+
+        build_crater_onnx_model(onnx_path)
+
     session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
 
     # Simulate a 512x512 orthoimage (~4 overlapping 256x256 tiles)
