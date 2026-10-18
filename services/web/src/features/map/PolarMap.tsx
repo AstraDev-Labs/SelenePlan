@@ -656,28 +656,42 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   }, [renderScene]);
 
   // =========================================================================
-  // Canvas Click Handler: PINS inspected terrain pixel permanently!
+  // Helper: Converts client mouse coordinates to canvas bitmap & terrain coords
   // =========================================================================
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // If the mouse dragged more than 5px, it was a pan operation, not a click
-    if (dragDistanceRef.current > 5) return;
-
+  const getCoordsFromEvent = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
+    if (rect.width === 0 || rect.height === 0) return null;
+
+    // Normalize CSS display pixels to internal canvas bitmap pixels!
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const bx = (clientX - rect.left) * scaleX;
+    const by = (clientY - rect.top) * scaleY;
 
     const scale = (EXTENT_M * 2) / canvas.width;
-    const dx = (px - (canvas.width / 2 + pan.x)) / zoom;
-    const dy = (py - (canvas.height / 2 + pan.y)) / zoom;
+    const dx = (bx - (canvas.width / 2 + pan.x)) / zoom;
+    const dy = (by - (canvas.height / 2 + pan.y)) / zoom;
     const xM = dx * scale;
     const yM = -dy * scale;
 
-    const inspection = computePointInspection(xM, yM);
+    return { bx, by, xM, yM };
+  }, [pan.x, pan.y, zoom]);
+
+  // Canvas Click Handler: PINS inspected terrain pixel at EXACT click location
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    // If user dragged more than 5px, it was a pan, not a click
+    if (dragDistanceRef.current > 5) return;
+
+    const coords = getCoordsFromEvent(e.clientX, e.clientY);
+    if (!coords) return;
+
+    const inspection = computePointInspection(coords.xM, coords.yM);
     setPinnedPoint({
-      xM,
-      yM,
+      xM: coords.xM,
+      yM: coords.yM,
       elev: inspection.elevation_m,
       slope: inspection.slope_deg,
     });
@@ -698,30 +712,31 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    const px = e.clientX - rect.left;
-    const py = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
 
     if (isDragging) {
-      const dX = px - dragStart.x;
-      const dY = py - dragStart.y;
+      const dX = (e.clientX - dragStart.x) * scaleX;
+      const dY = (e.clientY - dragStart.y) * scaleY;
       dragDistanceRef.current += Math.hypot(dX, dY);
       setPan({
         x: pan.x + dX,
         y: pan.y + dY,
       });
-      setDragStart({ x: px, y: py });
+      setDragStart({ x: e.clientX, y: e.clientY });
       return;
     }
 
     if (mouseRafRef.current) return;
+    const clientX = e.clientX;
+    const clientY = e.clientY;
+
     mouseRafRef.current = requestAnimationFrame(() => {
       mouseRafRef.current = null;
 
-      const scale = (EXTENT_M * 2) / canvas.width;
-      const dx = (px - (canvas.width / 2 + pan.x)) / zoom;
-      const dy = (py - (canvas.height / 2 + pan.y)) / zoom;
-      const xM = dx * scale;
-      const yM = -dy * scale;
+      const coords = getCoordsFromEvent(clientX, clientY);
+      if (!coords) return;
+      const { xM, yM } = coords;
 
       const slope = getSlopeAt(xM, yM);
       const elev = getElevationAt(xM, yM);
@@ -761,8 +776,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           onMouseDown={(e) => {
             setIsDragging(true);
             dragDistanceRef.current = 0;
-            const rect = e.currentTarget.getBoundingClientRect();
-            setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+            setDragStart({ x: e.clientX, y: e.clientY });
           }}
           onMouseUp={() => setIsDragging(false)}
           onMouseLeave={() => {
