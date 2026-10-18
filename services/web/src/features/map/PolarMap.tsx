@@ -50,6 +50,24 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   const dragDistanceRef = useRef<number>(0);
   const mouseRafRef = useRef<number | null>(null);
 
+  // Native non-passive wheel listener: smooth map zoom without scrolling the window
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      setZoom((z) => Math.min(4.0, Math.max(0.4, z * zoomFactor)));
+    };
+
+    canvas.addEventListener("wheel", onNativeWheel, { passive: false });
+    return () => {
+      canvas.removeEventListener("wheel", onNativeWheel);
+    };
+  }, []);
+
   // Analytic High-Fidelity Shackleton DEM profile generator with calibrated lunar slopes
   const getElevationAt = useCallback((xM: number, yM: number) => {
     const distSq = xM * xM + yM * yM;
@@ -729,7 +747,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     <div className="flex flex-col gap-3 w-full" style={{ width: "100%" }}>
       <div
         className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl"
-        style={{ width: "100%", height: 600, minHeight: 600, position: "relative" }}
+        style={{ width: "100%", height: 600, minHeight: 600, position: "relative", overscrollBehavior: "contain" }}
       >
         <canvas
           ref={canvasRef}
@@ -752,7 +770,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
               onInspect(null);
             }
           }}
-          style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair" }}
+          style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair", touchAction: "none", overscrollBehavior: "contain" }}
           aria-label="2D Lunar South Pole Polar Map"
         />
 

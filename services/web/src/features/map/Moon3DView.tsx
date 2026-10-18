@@ -470,9 +470,21 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
     };
     window.addEventListener("resize", handleResize);
 
+    // Native non-passive wheel listener: completely isolates 3D zoom from page scrolling
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const zoomDelta = e.deltaY * 0.0025;
+      const newRad = Math.max(1.5, Math.min(6.5, sphericalRef.current.radius + zoomDelta));
+      sphericalRef.current.radius = newRad;
+      setCameraDistance(Number(newRad.toFixed(1)));
+    };
+    container.addEventListener("wheel", handleNativeWheel, { passive: false });
+
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener("resize", handleResize);
+      container.removeEventListener("wheel", handleNativeWheel);
       renderer.dispose();
       moonGeo.dispose();
       moonMat.dispose();
@@ -528,14 +540,6 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
     isDraggingRef.current = false;
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    const zoomDelta = e.deltaY * 0.0025;
-    const newRad = Math.max(1.5, Math.min(6.5, sphericalRef.current.radius + zoomDelta));
-    sphericalRef.current.radius = newRad;
-    setCameraDistance(Number(newRad.toFixed(1)));
-  };
-
   // Quick Camera Presets
   const setCameraPreset = useCallback((preset: "south_pole" | "nearside" | "farside" | "terminator") => {
     setAutoRotate(false);
@@ -575,7 +579,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
       {/* 3D Viewport Container */}
       <div
         className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl"
-        style={{ width: "100%", height: 600, minHeight: 600, position: "relative" }}
+        style={{ width: "100%", height: 600, minHeight: 600, position: "relative", overscrollBehavior: "contain" }}
       >
         <div
           ref={mountRef}
@@ -583,9 +587,8 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          onWheel={handleWheel}
           className="w-full h-full cursor-grab active:cursor-grabbing"
-          style={{ width: "100%", height: "100%", display: "block" }}
+          style={{ width: "100%", height: "100%", display: "block", touchAction: "none", overscrollBehavior: "contain" }}
           aria-label="Interactive 3D Moon Surface Visualization"
         />
 
