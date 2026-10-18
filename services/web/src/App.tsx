@@ -137,7 +137,7 @@ export const App: React.FC = () => {
               {mapMode === "2d" ? (
                 <PolarMap layers={layers} onInspect={setInspection} onToggle3D={() => setMapMode("3d")} />
               ) : (
-                <Moon3DView onToggle2D={() => setMapMode("2d")} />
+                <Moon3DView onToggle2D={() => setMapMode("2d")} onInspect={setInspection} layers={layers} />
               )}
             </div>
             <div className="mission-dock">
@@ -149,8 +149,15 @@ export const App: React.FC = () => {
         )}
 
         {activeTab === "moon3d" && (
-          <div className="w-full">
-            <Moon3DView />
+          <div className="mission-deck w-full" style={{ width: "100%" }}>
+            <div className="mission-viewport">
+              <Moon3DView onInspect={setInspection} layers={layers} />
+            </div>
+            <div className="mission-dock">
+              <LayerControl layers={layers} onChange={setLayers} />
+              <PlannerPanel />
+              <InspectorPanel inspection={inspection} />
+            </div>
           </div>
         )}
 

@@ -8,11 +8,19 @@ import {
   MapPin,
   Navigation,
   Compass,
+  Target,
+  X,
+  ShieldAlert,
+  CheckCircle2,
 } from "lucide-react";
+import { PointInspection } from "./InspectorPanel";
+import { LayerState } from "./LayerControl";
 
 interface Moon3DViewProps {
   step?: number;
   onToggle2D?: () => void;
+  onInspect?: (data: PointInspection | null) => void;
+  layers?: LayerState;
 }
 
 interface Landmark {
@@ -97,6 +105,220 @@ function latLonToVector3(latDeg: number, lonDeg: number, radius: number): THREE.
   const z = radius * Math.sin(phi) * Math.sin(theta);
   const y = radius * Math.cos(phi);
   return new THREE.Vector3(x, y, z);
+}
+
+// Helper: Convert 3D Cartesian coordinates on sphere of radius R to Lunar Lat/Lon (deg)
+function vector3ToLatLon(vec: THREE.Vector3, radius: number = 1.0): { lat: number; lon: number } {
+  const normY = Math.max(-1.0, Math.min(1.0, vec.y / radius));
+  const phi = Math.acos(normY);
+  const lat = 90.0 - (phi * 180.0) / Math.PI;
+  const theta = Math.atan2(vec.z, -vec.x);
+  let lon = (theta * 180.0) / Math.PI - 180.0;
+  while (lon > 180.0) lon -= 360.0;
+  while (lon < -180.0) lon += 360.0;
+  return { lat, lon };
+}
+
+// Topographic Shackleton Elevation Generator for South Pole Region
+function getShackletonElev(xM: number, yM: number): number {
+  const distSq = xM * xM + yM * yM;
+  const dist = Math.sqrt(distSq);
+  const zFloor = -4180.0;
+  const zRim = -3300.0;
+  const zPlain = -3750.0;
+  const rFloor = 850.0;
+  const rRim = 2100.0;
+
+  let baseElev: number;
+  if (dist <= rFloor) {
+    const normR = dist / rFloor;
+    baseElev = zFloor + 50.0 * (normR * normR);
+  } else if (dist <= rRim) {
+    const t = (dist - rFloor) / (rRim - rFloor);
+    const s = 3.0 * t * t - 2.0 * t * t * t;
+    baseElev = (zFloor + 50.0) + (zRim - (zFloor + 50.0)) * s;
+  } else {
+    const dr = dist - rRim;
+    const decay = Math.exp(-Math.pow(dr / 3600.0, 1.25));
+    baseElev = zPlain + (zRim - zPlain) * decay;
+  }
+
+  const rx = (xM - (-2200.0)) / 1100.0;
+  const ry = yM / 4500.0;
+  const ridgeDistSq = rx * rx + ry * ry;
+  const ridgeBoost = 180.0 * Math.exp(-ridgeDistSq);
+
+  return baseElev + ridgeBoost;
+}
+
+function getShackletonSlope(xM: number, yM: number): number {
+  const delta = 25.0;
+  const zE = getShackletonElev(xM + delta, yM);
+  const zW = getShackletonElev(xM - delta, yM);
+  const zN = getShackletonElev(xM, yM + delta);
+  const zS = getShackletonElev(xM, yM - delta);
+  const dzdx = (zE - zW) / (2 * delta);
+  const dzdy = (zN - zS) / (2 * delta);
+  const grad = Math.sqrt(dzdx * dzdx + dzdy * dzdy);
+  const slopeDeg = Math.atan(grad) * (180.0 / Math.PI);
+  return Math.min(60.0, slopeDeg);
+}
+
+// Compute full Lunar Pixel Terrain Inspection
+function computeLunarInspection(
+  lat: number,
+  lon: number,
+  step: number,
+  maxSlopeLimit: number = 15.0
+): PointInspection {
+  const isSouthPoleRegion = lat <= -85.0;
+
+  let xM = 0;
+  let yM = 0;
+  let elev = -1200.0;
+  let slope = 4.2;
+  let aspect = 90.0;
+  let roughness = 0.45;
+  let isPSR = false;
+  let featureName = "Lunar Highlands";
+  let isLit = true;
+  let earthVis = true;
+  let mlHazard = false;
+  let mlConf = 0.0;
+
+  if (isSouthPoleRegion) {
+    const distM = (90.0 + lat) * 30300.0;
+    const lonRad = (lon * Math.PI) / 180.0;
+    xM = distM * Math.sin(lonRad);
+    yM = -distM * Math.cos(lonRad);
+
+    elev = getShackletonElev(xM, yM);
+    slope = getShackletonSlope(xM, yM);
+    roughness = Math.min(2.5, Math.max(0.15, slope * 0.06));
+    aspect = (Math.atan2(xM, yM) * 180.0) / Math.PI;
+
+    isPSR = distM < 1850.0;
+    earthVis = distM >= 1850.0;
+    const el = 1.8 * Math.sin((step / 48) * 2 * Math.PI + 0.3) + 1.2;
+    isLit = distM >= 1850.0 && el > 0.4;
+
+    if (distM < 900.0) {
+      featureName = "Shackleton Basin Floor (PSR)";
+    } else if (distM <= 2100.0) {
+      featureName = "Shackleton Inner Scarp Wall";
+    } else if (Math.abs(xM - (-2200)) < 900 && Math.abs(yM) < 3000) {
+      featureName = "Connecting Ridge Spine";
+    } else {
+      featureName = "South Polar Highlands";
+    }
+
+    if (distM > 1200 && distM < 2000 && Math.random() > 0.6) {
+      mlHazard = true;
+      mlConf = 0.82;
+    }
+  } else {
+    xM = (lon / 180.0) * 5450000.0;
+    yM = (lat / 90.0) * 2725000.0;
+    aspect = (lon + 360) % 360;
+
+    const inProcellarum = lat > -15 && lat < 55 && lon > -80 && lon < -15;
+    const inImbrium = lat > 15 && lat < 50 && lon > -40 && lon < 0;
+    const inTranquillitatis = lat > -5 && lat < 20 && lon > 15 && lon < 45;
+    const inSerenitatis = lat > 15 && lat < 40 && lon > 10 && lon < 35;
+    const inSPABasin = lat < -30 && (lon > 140 || lon < -140);
+    const nearTycho = Math.hypot(lat - (-43.3), lon - (-11.2)) < 8;
+    const nearCopernicus = Math.hypot(lat - 9.6, lon - (-20.1)) < 6;
+
+    if (inProcellarum) {
+      elev = -2100;
+      slope = 2.1;
+      roughness = 0.22;
+      featureName = "Oceanus Procellarum (Basalt)";
+    } else if (inImbrium) {
+      elev = -2600;
+      slope = 2.4;
+      roughness = 0.28;
+      featureName = "Mare Imbrium Basin";
+    } else if (inTranquillitatis) {
+      elev = -1400;
+      slope = 1.8;
+      roughness = 0.19;
+      featureName = "Mare Tranquillitatis";
+    } else if (inSerenitatis) {
+      elev = -2200;
+      slope = 2.2;
+      roughness = 0.24;
+      featureName = "Mare Serenitatis";
+    } else if (inSPABasin) {
+      elev = -6500;
+      slope = 4.8;
+      roughness = 0.75;
+      featureName = "South Pole-Aitken (SPA) Basin";
+    } else if (nearTycho) {
+      elev = 1400;
+      slope = 28.5;
+      roughness = 1.95;
+      featureName = "Tycho Crater Rim / Ray System";
+      mlHazard = true;
+      mlConf = 0.94;
+    } else if (nearCopernicus) {
+      elev = 900;
+      slope = 26.2;
+      roughness = 1.82;
+      featureName = "Copernicus Crater Complex";
+      mlHazard = true;
+      mlConf = 0.91;
+    } else {
+      elev = 800 + Math.sin(lat * 0.1) * 600;
+      slope = 5.4 + Math.abs(Math.sin(lon * 0.2)) * 3.2;
+      roughness = 0.52;
+      featureName = lat > 0 ? "Northern Cratered Highlands" : "Southern Lunar Highlands";
+    }
+
+    earthVis = lon >= -88.0 && lon <= 88.0;
+    const sunLon = (step * 7.5) % 360 - 180;
+    const dLon = Math.abs(lon - sunLon);
+    const sunAngleDiff = Math.min(dLon, 360 - dLon);
+    isLit = sunAngleDiff < 88.0;
+  }
+
+  const isTerrainHazard = slope > maxSlopeLimit;
+  const isFusedHazard = isTerrainHazard || mlHazard;
+  const sunSeries = Array.from({ length: 48 }, (_, t) => {
+    if (isSouthPoleRegion) return !isPSR && (t % 4 !== 0);
+    const sLon = (t * 7.5) % 360 - 180;
+    const diff = Math.min(Math.abs(lon - sLon), 360 - Math.abs(lon - sLon));
+    return diff < 88.0;
+  });
+  const earthSeries = Array.from({ length: 48 }, () => earthVis);
+  const litCount = sunSeries.filter(Boolean).length;
+  const litFrac = litCount / 48.0;
+
+  return {
+    x_m: Math.round(xM),
+    y_m: Math.round(yM),
+    lat_deg: Math.round(lat * 1000) / 1000,
+    lon_deg: Math.round(lon * 10) / 10,
+    elevation_m: Math.round(elev * 10) / 10,
+    slope_deg: Math.round(slope * 10) / 10,
+    aspect_deg: Math.round(aspect * 10) / 10,
+    roughness_m: Math.round(roughness * 100) / 100,
+    is_hazard: isTerrainHazard,
+    feature_name: featureName,
+    is_lit: isLit,
+    lit_fraction: litFrac,
+    longest_dark_hours: isPSR ? 708.0 : (1.0 - litFrac) * 48.0,
+    is_psr: isPSR,
+    time_series: sunSeries,
+    earth_visible: earthVis,
+    earth_elevation_deg: earthVis ? 4.2 : -5.0,
+    earth_visible_fraction: earthVis ? 0.95 : 0.0,
+    longest_blackout_hours: earthVis ? 12.0 : 708.0,
+    earth_series: earthSeries,
+    ml_hazard_detected: mlHazard,
+    ml_confidence: mlConf,
+    fused_hazard: isFusedHazard,
+  };
 }
 
 // Generate realistic procedural lunar surface texture and bump map on an HTML canvas
@@ -262,9 +484,10 @@ function createLunarTextures(): { diffuse: THREE.CanvasTexture; bump: THREE.Canv
   return { diffuse, bump };
 }
 
-export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
+export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInspect, layers }) => {
   const mountRef = useRef<HTMLDivElement>(null);
   const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(LUNAR_LANDMARKS[0]);
+  const [pinnedInspection, setPinnedInspection] = useState<PointInspection | null>(null);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
   const [cameraDistance, setCameraDistance] = useState<number>(3.8);
@@ -290,10 +513,12 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
   const moonMeshRef = useRef<THREE.Mesh | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const markersGroupRef = useRef<THREE.Group | null>(null);
+  const pinnedMarkerGroupRef = useRef<THREE.Group | null>(null);
 
   // Orbit state
   const isDraggingRef = useRef<boolean>(false);
   const prevMouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const mouseDownPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const sphericalRef = useRef<{ radius: number; theta: number; phi: number }>({
     radius: 3.8,
     theta: Math.PI * 0.5,
@@ -519,10 +744,111 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
     }
   }, [showLandmarks]);
 
+  // Click-to-Inspect raycasting on 3D Moon Surface
+  const handleMoonClick = useCallback(
+    (e: React.MouseEvent) => {
+      const container = mountRef.current;
+      const camera = cameraRef.current;
+      const moonMesh = moonMeshRef.current;
+      const scene = sceneRef.current;
+      if (!container || !camera || !moonMesh || !scene) return;
+
+      const rect = container.getBoundingClientRect();
+      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+      const intersects = raycaster.intersectObject(moonMesh);
+
+      if (intersects.length > 0) {
+        const hit = intersects[0];
+        const pt = hit.point;
+        const { lat, lon } = vector3ToLatLon(pt, 1.0);
+
+        const inspection = computeLunarInspection(lat, lon, currentStep, layers?.maxSlopeLimit ?? 15.0);
+        setPinnedInspection(inspection);
+        setSelectedLandmark(null);
+        if (onInspect) {
+          onInspect(inspection);
+        }
+
+        // Create or reposition 3D pinned target marker on the Moon surface
+        if (pinnedMarkerGroupRef.current) {
+          scene.remove(pinnedMarkerGroupRef.current);
+        }
+
+        const markerGroup = new THREE.Group();
+        pinnedMarkerGroupRef.current = markerGroup;
+
+        const norm = pt.clone().normalize();
+        const pos = norm.clone().multiplyScalar(1.008);
+
+        // Target ring on surface
+        const ringGeo = new THREE.RingGeometry(0.022, 0.034, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: inspection.is_hazard ? 0xf43f5e : 0x06b6d4,
+          transparent: true,
+          opacity: 0.9,
+          side: THREE.DoubleSide,
+        });
+        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+        ringMesh.position.copy(pos);
+        ringMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), norm);
+        markerGroup.add(ringMesh);
+
+        // Inner target crosshair ring
+        const crossRingGeo = new THREE.RingGeometry(0.006, 0.012, 16);
+        const crossRingMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          side: THREE.DoubleSide,
+        });
+        const crossMesh = new THREE.Mesh(crossRingGeo, crossRingMat);
+        crossMesh.position.copy(pos.clone().multiplyScalar(1.001));
+        crossMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), norm);
+        markerGroup.add(crossMesh);
+
+        // Vertical beacon stem
+        const stemGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.12, 16);
+        const stemMat = new THREE.MeshBasicMaterial({
+          color: inspection.is_hazard ? 0xf43f5e : 0x06b6d4,
+        });
+        const stemMesh = new THREE.Mesh(stemGeo, stemMat);
+        stemMesh.position.copy(pos.clone().add(norm.clone().multiplyScalar(0.06)));
+        stemMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
+        markerGroup.add(stemMesh);
+
+        // Glowing beacon tip
+        const tipGeo = new THREE.SphereGeometry(0.018, 16, 16);
+        const tipMat = new THREE.MeshBasicMaterial({
+          color: inspection.is_hazard ? 0xfb7185 : 0x38bdf8,
+        });
+        const tipMesh = new THREE.Mesh(tipGeo, tipMat);
+        tipMesh.position.copy(pos.clone().add(norm.clone().multiplyScalar(0.12)));
+        markerGroup.add(tipMesh);
+
+        scene.add(markerGroup);
+      }
+    },
+    [currentStep, layers?.maxSlopeLimit, onInspect]
+  );
+
+  const handleUnpin = useCallback(() => {
+    setPinnedInspection(null);
+    if (sceneRef.current && pinnedMarkerGroupRef.current) {
+      sceneRef.current.remove(pinnedMarkerGroupRef.current);
+      pinnedMarkerGroupRef.current = null;
+    }
+    if (onInspect) {
+      onInspect(null);
+    }
+  }, [onInspect]);
+
   // Mouse & Touch Controls
   const handleMouseDown = (e: React.MouseEvent) => {
     isDraggingRef.current = true;
     prevMouseRef.current = { x: e.clientX, y: e.clientY };
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -536,8 +862,15 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
     sphericalRef.current.phi = Math.max(0.05, Math.min(Math.PI - 0.05, sphericalRef.current.phi - dy * 0.006));
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
     isDraggingRef.current = false;
+    const moveDist = Math.hypot(
+      e.clientX - mouseDownPosRef.current.x,
+      e.clientY - mouseDownPosRef.current.y
+    );
+    if (moveDist < 6) {
+      handleMoonClick(e);
+    }
   };
 
   // Quick Camera Presets
@@ -587,7 +920,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          className="w-full h-full cursor-grab active:cursor-grabbing"
+          className="w-full h-full cursor-crosshair"
           style={{ width: "100%", height: "100%", display: "block", touchAction: "none", overscrollBehavior: "contain" }}
           aria-label="Interactive 3D Moon Surface Visualization"
         />
@@ -687,8 +1020,65 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
           )}
         </div>
 
-        {/* Bottom-Left: Selected Landmark Telemetry Card */}
-        {selectedLandmark && (
+        {/* Bottom-Left: Pinned Pixel Terrain Inspection or Selected Landmark Card */}
+        {pinnedInspection ? (
+          <div className="absolute bottom-4 left-4 glass-panel p-3 max-w-sm flex flex-col gap-2 text-xs font-mono border-l-2 border-l-cyan-400 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-cyan-300 text-sm flex items-center gap-1.5">
+                <Target className="w-4 h-4 text-cyan-400" />
+                {pinnedInspection.feature_name}
+              </span>
+              <button
+                onClick={handleUnpin}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 hover:bg-rose-500/20 text-gray-300 hover:text-rose-300 transition-colors text-[10px]"
+              >
+                <X className="w-3 h-3" />
+                <span>UNPIN</span>
+              </button>
+            </div>
+
+            <div
+              className={`flex items-center justify-between p-1.5 rounded border text-[11px] font-sans font-semibold ${
+                pinnedInspection.is_hazard
+                  ? "bg-rose-950/40 border-rose-500/40 text-rose-300"
+                  : "bg-emerald-950/40 border-emerald-500/40 text-emerald-300"
+              }`}
+            >
+              <div className="flex items-center gap-1.5">
+                {pinnedInspection.is_hazard ? (
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-400" />
+                ) : (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span>{pinnedInspection.is_hazard ? "SLOPE EXCEEDED" : "SAFE TERRAIN"}</span>
+              </div>
+              <span className="font-mono text-[10px]">
+                {pinnedInspection.slope_deg.toFixed(1)}° (MAX {layers?.maxSlopeLimit ?? 15}°)
+              </span>
+            </div>
+
+            <div className="text-[10px] text-gray-300 bg-white/5 p-1.5 rounded grid grid-cols-2 gap-1.5">
+              <div>
+                Coords: <strong className="text-white">{pinnedInspection.lat_deg > 0 ? `${pinnedInspection.lat_deg}°N` : `${Math.abs(pinnedInspection.lat_deg)}°S`}, {pinnedInspection.lon_deg}°E</strong>
+              </div>
+              <div>
+                Elev: <strong className="text-emerald-300">{pinnedInspection.elevation_m} m</strong>
+              </div>
+              <div>
+                Sun: <strong className={pinnedInspection.is_lit ? "text-amber-300" : "text-gray-400"}>{pinnedInspection.is_lit ? "SUNLIT" : "SHADOW"}</strong>
+              </div>
+              <div>
+                Earth LOS: <strong className={pinnedInspection.earth_visible ? "text-sky-300" : "text-rose-400"}>{pinnedInspection.earth_visible ? "VISIBLE" : "OCCULTED"}</strong>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-cyan-300/80 italic flex items-center justify-between">
+              <span>Full telemetry sent to Mission Dock</span>
+              <span>•</span>
+              <span className="text-gray-400">Click anywhere to inspect</span>
+            </div>
+          </div>
+        ) : selectedLandmark ? (
           <div className="absolute bottom-4 left-4 glass-panel p-3 max-w-sm flex flex-col gap-1.5 text-xs font-mono border-l-2 border-l-sky-400 shadow-2xl">
             <div className="flex items-center justify-between">
               <span className="font-bold text-sky-300 text-sm flex items-center gap-1.5">
@@ -712,9 +1102,12 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D }) => {
               <span>Coords: {selectedLandmark.lat > 0 ? `${selectedLandmark.lat}°N` : `${Math.abs(selectedLandmark.lat)}°S`}, {selectedLandmark.lon}°E</span>
               <span className="text-sky-300 font-bold">{selectedLandmark.elevM} m</span>
             </div>
-            <div className="text-[10px] text-emerald-300/80 italic">{selectedLandmark.details}</div>
+            <div className="text-[10px] text-emerald-300/80 italic flex items-center justify-between">
+              <span>{selectedLandmark.details}</span>
+              <span className="text-cyan-300 font-sans ml-2">(Click Moon to inspect)</span>
+            </div>
           </div>
-        )}
+        ) : null}
 
         {/* Bottom-Right: Interactive Landmark Switcher Chips */}
         <div className="absolute bottom-4 right-4 flex items-center gap-1.5 overflow-x-auto max-w-lg glass-panel p-1.5">

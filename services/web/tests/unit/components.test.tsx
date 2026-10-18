@@ -5,6 +5,7 @@ import { Navbar } from "../../src/components/Navbar";
 import { LayerControl } from "../../src/features/map/LayerControl";
 import { InspectorPanel } from "../../src/features/map/InspectorPanel";
 import { TimelineScrubber } from "../../src/features/map/TimelineScrubber";
+import { Moon3DView } from "../../src/features/map/Moon3DView";
 import { useAuthStore } from "../../src/auth/store";
 
 describe("Web UI Components", () => {
@@ -177,5 +178,15 @@ describe("Web UI Components", () => {
     const slider = screen.getByLabelText(/Timeline Scrubber Slider/i);
     fireEvent.change(slider, { target: { value: "2" } });
     expect(handleStep).toHaveBeenCalledWith(2);
+  });
+
+  it("renders Moon3DView with telemetry HUD, camera presets, and landmark markers", () => {
+    const handleInspect = vi.fn();
+    render(<Moon3DView onInspect={handleInspect} />);
+
+    expect(screen.getByText(/3D LUNAR GLOBE/i)).toBeInTheDocument();
+    expect(screen.getByText(/South Pole \(AOI\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Earth-Facing/i)).toBeInTheDocument();
+    expect(screen.getByText(/Shackleton Crater/i)).toBeInTheDocument();
   });
 });
