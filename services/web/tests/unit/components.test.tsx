@@ -5,7 +5,10 @@ import { Navbar } from "../../src/components/Navbar";
 import { LayerControl, LayerState } from "../../src/features/map/LayerControl";
 import { InspectorPanel } from "../../src/features/map/InspectorPanel";
 import { TimelineScrubber } from "../../src/features/map/TimelineScrubber";
+import { PolarMap } from "../../src/features/map/PolarMap";
+import { PlannerPanel } from "../../src/features/map/PlannerPanel";
 import { Moon3DView } from "../../src/features/map/Moon3DView";
+import { MISSION_PROJECTS } from "../../src/features/projects/projectConfig";
 import { useAuthStore } from "../../src/auth/store";
 
 describe("Web UI Components", () => {
@@ -218,5 +221,31 @@ describe("Web UI Components", () => {
     expect(screen.getByText(/❄ PSR COLD TRAPS/i)).toBeInTheDocument();
     expect(screen.getByText(/EARTH LINE-OF-SIGHT/i)).toBeInTheDocument();
     expect(screen.getByText(/SOLAR ILLUMINATION/i)).toBeInTheDocument();
+  });
+
+  it("renders PolarMap and PlannerPanel with VIPER project data when switched", () => {
+    const viperProject = MISSION_PROJECTS["00000000-0000-0000-0000-000000000002"];
+    const layers: LayerState = {
+      showSlope: false,
+      showAspect: false,
+      showRoughness: false,
+      showHazard: false,
+      showHillshade: true,
+      showIllumination: false,
+      showPSR: false,
+      showEarthVisibility: false,
+      showMLHazard: false,
+      showFusedHazard: false,
+      mlConfidenceThreshold: 0.6,
+      colormap: "viridis",
+      maxSlopeLimit: 12,
+    };
+
+    render(<PolarMap layers={layers} onInspect={vi.fn()} project={viperProject} />);
+    expect(screen.getByText(/NOBILE \/ MONS MOUTON AOI/i)).toBeInTheDocument();
+
+    render(<PlannerPanel project={viperProject} maxSlopeLimit={12} />);
+    expect(screen.getByText(/VIPER \(Volatiles Investigating Polar Rover\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/500 Wh/i)).toBeInTheDocument();
   });
 });

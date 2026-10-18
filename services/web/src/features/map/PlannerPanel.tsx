@@ -9,17 +9,29 @@ interface RouteResult {
   explanation: string;
 }
 
+import { ProjectConfig } from "@/features/projects/projectConfig";
+
 interface PlannerPanelProps {
+  project?: ProjectConfig;
   maxSlopeLimit?: number;
   onMaxSlopeChange?: (slope: number) => void;
 }
 
-export const PlannerPanel: React.FC<PlannerPanelProps> = ({ maxSlopeLimit, onMaxSlopeChange }) => {
-  const [maxSlope, setMaxSlope] = useState<number>(maxSlopeLimit ?? 15.0);
-  const [batteryCap, setBatteryCap] = useState<number>(500.0);
+export const PlannerPanel: React.FC<PlannerPanelProps> = ({ project, maxSlopeLimit, onMaxSlopeChange }) => {
+  const [maxSlope, setMaxSlope] = useState<number>(maxSlopeLimit ?? project?.rover.nominalSlopeDeg ?? 15.0);
+  const [batteryCap, setBatteryCap] = useState<number>(project?.rover.batteryCapacityWh ?? 500.0);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [whatifResult, setWhatifResult] = useState<RouteResult | null>(null);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (project) {
+      setBatteryCap(project.rover.batteryCapacityWh);
+      setMaxSlope(project.rover.nominalSlopeDeg);
+      setRouteResult(null);
+      setWhatifResult(null);
+    }
+  }, [project?.id]);
 
   React.useEffect(() => {
     if (maxSlopeLimit !== undefined) {
@@ -35,7 +47,7 @@ export const PlannerPanel: React.FC<PlannerPanelProps> = ({ maxSlopeLimit, onMax
         distance_m: 0,
         duration_h: 0,
         min_battery_wh: batteryCap,
-        explanation: `Route rejected: Traverse blocked by 12.4° scarp along Shackleton rim (current threshold: ${maxSlope.toFixed(1)}°).`,
+        explanation: `Route rejected: Traverse blocked by 12.4° scarp along ${project?.targetFeature ?? "rim"} (current threshold: ${maxSlope.toFixed(1)}°).`,
       });
     } else {
       const dist = Math.round(310 + (25 - maxSlope) * 4.5);
@@ -46,7 +58,7 @@ export const PlannerPanel: React.FC<PlannerPanelProps> = ({ maxSlopeLimit, onMax
         distance_m: dist,
         duration_h: dur,
         min_battery_wh: minBat,
-        explanation: "Traverse plan feasible. Satisfies all illumination, hazard fusion, and energy survival constraints.",
+        explanation: `Traverse plan feasible for ${project?.rover.model ?? "rover"}. Satisfies all illumination, hazard fusion, and energy survival constraints.`,
       });
     }
   };
@@ -56,38 +68,52 @@ export const PlannerPanel: React.FC<PlannerPanelProps> = ({ maxSlopeLimit, onMax
       success: true,
       distance_m: 355.0,
       duration_h: 0.98,
-      min_battery_wh: 520.0,
-      explanation: "Alternative route detours around steep 12° ridge. Distance +35.0 m, Min Battery +107.5 Wh.",
+      min_battery_wh: Math.round(batteryCap * 0.88),
+      explanation: `Alternative route detours around steep 12° ridge. Distance +35.0 m, Min Battery +${Math.round(batteryCap * 0.12)} Wh.`,
     });
   };
+
+  const startCoords = project?.plannerDefaults.startCoords ?? [-1.6, 0.0];
+  const goalCoords = project?.plannerDefaults.goalCoords ?? [1.6, 0.0];
 
   return (
     <div className="glass-panel p-5 flex flex-col gap-4 text-xs font-mono border-cyan-500/20">
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
-        <div className="flex items-center gap-2 text-cyan-300 font-bold text-sm">
-          <Route className="w-4 h-4 text-cyan-400" />
-          <span>Mission Traverse Planner</span>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2 text-cyan-300 font-bold text-sm">
+            <Route className="w-4 h-4 text-cyan-400" />
+            <span>Mission Traverse Planner</span>
+          </div>
+          {project && (
+            <span className="text-[10px] text-fuchsia-300 font-mono">
+              Vehicle: {project.rover.model}
+            </span>
+          )}
         </div>
         <span className="badge badge-cyan text-[10px]">TIME-EXPANDED A*</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[11px] text-gray-400 block mb-1">Start Polar (km)</label>
+          <label className="text-[11px] text-gray-400 block mb-1 truncate" title={project?.plannerDefaults.startLabel}>
+            Start: {project?.plannerDefaults.startLabel ?? "Start"} (km)
+          </label>
           <input
             type="text"
             readOnly
-            value="[ -1.6, 0.0 ]"
-            className="w-full bg-black/40 border border-white/10 rounded px-2.5 py-1.5 text-gray-300"
+            value={`[ ${startCoords[0].toFixed(1)}, ${startCoords[1].toFixed(1)} ]`}
+            className="w-full bg-black/40 border border-white/10 rounded px-2.5 py-1.5 text-cyan-300 font-mono"
           />
         </div>
         <div>
-          <label className="text-[11px] text-gray-400 block mb-1">Goal Polar (km)</label>
+          <label className="text-[11px] text-gray-400 block mb-1 truncate" title={project?.plannerDefaults.goalLabel}>
+            Goal: {project?.plannerDefaults.goalLabel ?? "Goal"} (km)
+          </label>
           <input
             type="text"
             readOnly
-            value="[ 1.6, 0.0 ]"
-            className="w-full bg-black/40 border border-white/10 rounded px-2.5 py-1.5 text-gray-300"
+            value={`[ ${goalCoords[0].toFixed(1)}, ${goalCoords[1].toFixed(1)} ]`}
+            className="w-full bg-black/40 border border-white/10 rounded px-2.5 py-1.5 text-cyan-300 font-mono"
           />
         </div>
       </div>

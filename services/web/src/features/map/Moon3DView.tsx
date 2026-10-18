@@ -15,18 +15,20 @@ import {
 } from "lucide-react";
 import { PointInspection } from "./InspectorPanel";
 import { LayerState } from "./LayerControl";
+import { ProjectConfig, MISSION_PROJECTS } from "../projects/projectConfig";
 
 interface Moon3DViewProps {
   step?: number;
   onToggle2D?: () => void;
   onInspect?: (data: PointInspection | null) => void;
   layers?: LayerState;
+  project?: ProjectConfig;
 }
 
 interface Landmark {
   id: string;
   name: string;
-  category: "artemis" | "apollo" | "psr" | "ridge";
+  category: "artemis" | "apollo" | "psr" | "ridge" | "viper";
   lat: number;
   lon: number;
   elevM: number;
@@ -311,7 +313,8 @@ function computeLunarInspection(
   lon: number,
   step: number,
   maxSlopeLimit: number = 15.0,
-  mlConfidenceThreshold: number = 0.60
+  mlConfidenceThreshold: number = 0.60,
+  project?: ProjectConfig
 ): PointInspection {
   const isSouthPoleRegion = lat <= -80.0;
 
@@ -355,7 +358,35 @@ function computeLunarInspection(
     }
   }
 
-  if (isSouthPoleRegion) {
+  if (project?.id === "00000000-0000-0000-0000-000000000002" && lat <= -82.0) {
+    // Project VIPER: Nobile & Mons Mouton region
+    xM = (lon - project.centerLon) * 30300.0 * Math.cos((Math.abs(lat) * Math.PI) / 180.0);
+    yM = (lat - project.centerLat) * 30300.0;
+    elev = project.elevationProfile(xM, yM);
+
+    const delta = 30.0;
+    const zE = project.elevationProfile(xM + delta, yM);
+    const zW = project.elevationProfile(xM - delta, yM);
+    const zN = project.elevationProfile(xM, yM + delta);
+    const zS = project.elevationProfile(xM, yM - delta);
+    const dzdx = (zE - zW) / (2 * delta);
+    const dzdy = (zN - zS) / (2 * delta);
+    slope = Math.min(55.0, Math.atan(Math.hypot(dzdx, dzdy)) * (180.0 / Math.PI));
+    roughness = Math.min(2.5, Math.max(0.18, slope * 0.055));
+    aspect = (Math.atan2(xM, yM) * 180.0) / Math.PI;
+
+    const el = 1.8 * Math.sin((step / 48) * 2 * Math.PI + 0.3) + 1.2;
+    earthVis = !isPSR;
+    isLit = !isPSR && (xM < -1200 ? el > -0.3 : el > 0.4);
+
+    if (!isPSR && !mlHazard) {
+      if (xM < -1500) featureName = "Mons Mouton Massif Plateau (+6,100m)";
+      else if (xM > 1200) featureName = "Nobile Crater Rim / Scarp";
+      else featureName = "Nobile Ridge Transition";
+    } else if (mlHazard && !isPSR) {
+      featureName = `${mlName} [ML ${(mlConf * 100).toFixed(0)}%]`;
+    }
+  } else if (isSouthPoleRegion) {
     const colatRad = (90.0 + lat) * (Math.PI / 180.0);
     const lonRad = (lon * Math.PI) / 180.0;
     const rSP_M = 1737400.0 * colatRad;
@@ -646,9 +677,12 @@ function createLunarTextures(): { diffuse: THREE.CanvasTexture; bump: THREE.Canv
   return { diffuse, bump };
 }
 
-export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInspect, layers }) => {
+export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInspect, layers, project }) => {
+  const activeProject = project || MISSION_PROJECTS["00000000-0000-0000-0000-000000000001"];
+  const landmarks = activeProject.landmarks.length > 0 ? activeProject.landmarks : LUNAR_LANDMARKS;
+
   const mountRef = useRef<HTMLDivElement>(null);
-  const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(LUNAR_LANDMARKS[0]);
+  const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(landmarks[0]);
   const [pinnedInspection, setPinnedInspection] = useState<PointInspection | null>(null);
   const [autoRotate, setAutoRotate] = useState<boolean>(true);
   const [showLandmarks, setShowLandmarks] = useState<boolean>(true);
@@ -1052,6 +1086,117 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
       container.innerHTML = "";
     };
   }, []);
+
+  // Synchronize 3D Camera, Waypoints, and Markers with Active Project
+  useEffect(() => {
+    setAutoRotate(false);
+    handleUnpin();
+    if (landmarks.length > 0) {
+      setSelectedLandmark(landmarks[0]);
+    }
+
+    // Orient camera towards the active project's center coordinates
+    const targetVec = latLonToVector3(activeProject.centerLat, activeProject.centerLon, 1.0);
+    const spherical = new THREE.Spherical().setFromVector3(targetVec.multiplyScalar(2.3));
+    sphericalRef.current = {
+      radius: 2.3,
+      theta: spherical.theta,
+      phi: Math.max(0.08, Math.min(Math.PI - 0.08, spherical.phi)),
+    };
+    setCameraDistance(2.3);
+
+    // Reconstruct 3D Landmark Markers for the active project
+    const markGroup = markersGroupRef.current;
+    if (markGroup) {
+      while (markGroup.children.length > 0) {
+        const child = markGroup.children[0];
+        markGroup.remove(child);
+        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+      }
+
+      landmarks.forEach((lm) => {
+        const pos = latLonToVector3(lm.lat, lm.lon, 1.006);
+        const stemGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.08, 16);
+        const isCenter = Math.abs(lm.lat - activeProject.centerLat) < 0.2;
+        const stemMat = new THREE.MeshBasicMaterial({
+          color: isCenter ? 0x38bdf8 : lm.category === "viper" ? 0x06b6d4 : lm.category === "artemis" ? 0x10b981 : 0xf59e0b,
+        });
+        const stem = new THREE.Mesh(stemGeo, stemMat);
+        stem.position.copy(pos);
+        stem.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pos.clone().normalize());
+
+        const tipGeo = new THREE.SphereGeometry(isCenter ? 0.022 : 0.015, 16, 16);
+        const tipMat = new THREE.MeshBasicMaterial({
+          color: isCenter ? 0x38bdf8 : lm.category === "viper" ? 0x22d3ee : lm.category === "artemis" ? 0x34d399 : 0xfbbf24,
+        });
+        const tip = new THREE.Mesh(tipGeo, tipMat);
+        tip.position.copy(pos.clone().add(pos.clone().normalize().multiplyScalar(0.04)));
+
+        const ringGeo = new THREE.RingGeometry(0.018, 0.025, 32);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: isCenter ? 0x38bdf8 : 0x10b981,
+          transparent: true,
+          opacity: 0.8,
+          side: THREE.DoubleSide,
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.copy(pos.clone().multiplyScalar(1.002));
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), pos.clone().normalize());
+
+        markGroup.add(stem);
+        markGroup.add(tip);
+        markGroup.add(ring);
+      });
+    }
+
+    // Reconstruct 3D Traverse Route & Waypoints for the active project
+    const routeGroup = route3DGroupRef.current;
+    if (routeGroup) {
+      while (routeGroup.children.length > 0) {
+        const child = routeGroup.children[0];
+        routeGroup.remove(child);
+        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+      }
+
+      const routePoints: THREE.Vector3[] = [];
+      activeProject.waypoints.forEach((wp) => {
+        let lat: number, lon: number;
+        if (activeProject.id === "00000000-0000-0000-0000-000000000002") {
+          lat = activeProject.centerLat + (wp.y / 30300.0);
+          lon = activeProject.centerLon + (wp.x / (30300.0 * Math.cos((Math.abs(lat) * Math.PI) / 180.0)));
+        } else {
+          const coords = polarStereoToLatLon(wp.x, wp.y);
+          lat = coords.lat;
+          lon = coords.lon;
+        }
+        const wpPos = latLonToVector3(lat, lon, 1.004);
+        routePoints.push(wpPos);
+
+        const wpRingGeo = new THREE.RingGeometry(0.008, 0.014, 16);
+        const wpRingMat = new THREE.MeshBasicMaterial({
+          color: wp.type === "start" ? 0x10b981 : wp.type === "target" ? 0xf59e0b : 0x38bdf8,
+          side: THREE.DoubleSide,
+        });
+        const wpRing = new THREE.Mesh(wpRingGeo, wpRingMat);
+        wpRing.position.copy(wpPos);
+        wpRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), wpPos.clone().normalize());
+        routeGroup.add(wpRing);
+      });
+
+      if (routePoints.length >= 2) {
+        const curve = new THREE.CatmullRomCurve3(routePoints);
+        const curvePts = curve.getPoints(40);
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.85,
+        });
+        const routeLine = new THREE.Line(lineGeo, lineMat);
+        routeGroup.add(routeLine);
+      }
+    }
+  }, [activeProject.id]);
 
   // Synchronize Solar Light Vector with Timeline Step and Illumination Layer
   useEffect(() => {
@@ -1478,7 +1623,8 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
           lon,
           currentStep,
           layers?.maxSlopeLimit ?? 15.0,
-          layers?.mlConfidenceThreshold ?? 0.60
+          layers?.mlConfidenceThreshold ?? 0.60,
+          activeProject
         );
         setPinnedInspection(inspection);
         setSelectedLandmark(null);
@@ -1543,7 +1689,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
         scene.add(markerGroup);
       }
     },
-    [currentStep, layers?.maxSlopeLimit, layers?.mlConfidenceThreshold, onInspect]
+    [activeProject, currentStep, layers?.maxSlopeLimit, layers?.mlConfidenceThreshold, onInspect]
   );
 
   const handleUnpin = useCallback(() => {
@@ -1590,9 +1736,15 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
   const setCameraPreset = useCallback((preset: "south_pole" | "nearside" | "farside" | "terminator") => {
     setAutoRotate(false);
     if (preset === "south_pole") {
-      // Look straight down at South Pole (-89.9°S)
-      sphericalRef.current = { radius: 2.3, theta: Math.PI * 0.5, phi: Math.PI * 0.94 };
-      setSelectedLandmark(LUNAR_LANDMARKS[0]);
+      // Look at active mission AOI target
+      const targetVec = latLonToVector3(activeProject.centerLat, activeProject.centerLon, 1.0);
+      const spherical = new THREE.Spherical().setFromVector3(targetVec.multiplyScalar(2.3));
+      sphericalRef.current = {
+        radius: 2.3,
+        theta: spherical.theta,
+        phi: Math.max(0.08, Math.min(Math.PI - 0.08, spherical.phi)),
+      };
+      if (landmarks.length > 0) setSelectedLandmark(landmarks[0]);
     } else if (preset === "nearside") {
       // Classic Earth-facing view (0° Lat, 0° Lon)
       sphericalRef.current = { radius: 3.2, theta: Math.PI * 0.5, phi: Math.PI * 0.5 };
@@ -1604,7 +1756,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
       sphericalRef.current = { radius: 2.8, theta: 0.0, phi: Math.PI * 0.5 };
     }
     setCameraDistance(Number(sphericalRef.current.radius.toFixed(1)));
-  }, []);
+  }, [activeProject.centerLat, activeProject.centerLon, landmarks]);
 
   const focusLandmark = (lm: Landmark) => {
     setSelectedLandmark(lm);
@@ -1655,7 +1807,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
         <div className="absolute top-4 left-4 glass-panel px-3.5 py-2.5 flex flex-col gap-1.5 text-[11px] font-mono pointer-events-none select-none z-10 max-w-sm">
           <div className="flex items-center gap-2 text-sky-300 font-bold">
             <Moon className="w-4 h-4 text-sky-400" />
-            <span>3D LUNAR GLOBE: HIGH-RESOLUTION VISUALIZER</span>
+            <span>3D LUNAR GLOBE: {activeProject.aoiLabel}</span>
           </div>
           <div className="flex items-center gap-2 text-emerald-300 text-[10px]">
             <Globe className="w-3.5 h-3.5 text-emerald-400" />
@@ -1739,7 +1891,11 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-mono bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 border border-sky-500/40 transition-colors"
           >
             <Compass className="w-3.5 h-3.5" />
-            <span>South Pole (AOI)</span>
+            <span>
+              {activeProject.id === "00000000-0000-0000-0000-000000000002"
+                ? "Nobile (AOI)"
+                : "South Pole (AOI)"}
+            </span>
           </button>
           <button
             onClick={() => setCameraPreset("nearside")}
@@ -1876,6 +2032,8 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
                 className={`text-[9px] px-1.5 py-0.5 rounded font-bold uppercase ${
                   selectedLandmark.category === "artemis"
                     ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                    : selectedLandmark.category === "viper"
+                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
                     : selectedLandmark.category === "ridge"
                     ? "bg-sky-500/20 text-sky-300 border border-sky-500/30"
                     : "bg-amber-500/20 text-amber-300 border border-amber-500/30"
@@ -1898,7 +2056,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
 
         {/* Bottom-Right: Interactive Landmark Switcher Chips */}
         <div className="absolute bottom-4 right-4 flex items-center gap-1.5 overflow-x-auto max-w-lg glass-panel p-1.5">
-          {LUNAR_LANDMARKS.map((lm) => (
+          {landmarks.map((lm) => (
             <button
               key={lm.id}
               onClick={() => focusLandmark(lm)}

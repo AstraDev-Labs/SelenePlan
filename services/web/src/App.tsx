@@ -14,10 +14,15 @@ import { AuditView } from "@/features/audit/AuditView";
 import { useAuthStore, UserRole } from "@/auth/store";
 import { ShieldCheck, UserCog, Globe, Compass } from "lucide-react";
 
+import { getProjectConfig } from "@/features/projects/projectConfig";
+
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>("map");
   const [mapMode, setMapMode] = useState<"2d" | "3d">("2d");
   const [inspection, setInspection] = useState<PointInspection | null>(null);
+
+  const { isAuthenticated, login, user, activeProjectId } = useAuthStore();
+  const activeProject = getProjectConfig(activeProjectId);
 
   const [layers, setLayers] = useState<LayerState>({
     showSlope: true,
@@ -35,7 +40,12 @@ export const App: React.FC = () => {
     maxSlopeLimit: 15,
   });
 
-  const { isAuthenticated, login, user } = useAuthStore();
+  // Automatically sync maxSlopeLimit when project changes
+  useEffect(() => {
+    if (activeProject) {
+      setLayers((l) => ({ ...l, maxSlopeLimit: activeProject.rover.nominalSlopeDeg }));
+    }
+  }, [activeProjectId]);
 
   // Initialize with Analyst session by default
   useEffect(() => {
@@ -45,7 +55,10 @@ export const App: React.FC = () => {
         name: "Dr. Eliana Vance",
         email: "e.vance@mission.seleneplan.org",
         roles: ["analyst", "operator"],
-        projects: ["00000000-0000-0000-0000-000000000001"],
+        projects: [
+          "00000000-0000-0000-0000-000000000001",
+          "00000000-0000-0000-0000-000000000002",
+        ],
       });
     }
   }, [isAuthenticated, login]);
@@ -57,7 +70,10 @@ export const App: React.FC = () => {
       name: `Agent (${role.toUpperCase()})`,
       email: `${role}@mission.seleneplan.org`,
       roles: [role],
-      projects: ["00000000-0000-0000-0000-000000000001"],
+      projects: [
+        "00000000-0000-0000-0000-000000000001",
+        "00000000-0000-0000-0000-000000000002",
+      ],
     });
   };
 
@@ -77,6 +93,10 @@ export const App: React.FC = () => {
             <div className="flex items-center gap-2 text-gray-300">
               <UserCog className="w-4 h-4 text-sky-400" />
               <span>Security Clearance: <strong className="text-white capitalize">{user?.roles.join(", ")}</strong></span>
+            </div>
+            <div className="hidden lg:flex items-center gap-1.5 text-gray-400 border-l border-white/10 pl-3">
+              <span>Mission:</span>
+              <strong className="text-cyan-300 font-bold">{activeProject.name}</strong>
             </div>
           </div>
 
@@ -135,14 +155,25 @@ export const App: React.FC = () => {
           <div className="mission-deck w-full" style={{ width: "100%" }}>
             <div className="mission-viewport">
               {mapMode === "2d" ? (
-                <PolarMap layers={layers} onInspect={setInspection} onToggle3D={() => setMapMode("3d")} />
+                <PolarMap
+                  layers={layers}
+                  project={activeProject}
+                  onInspect={setInspection}
+                  onToggle3D={() => setMapMode("3d")}
+                />
               ) : (
-                <Moon3DView onToggle2D={() => setMapMode("2d")} onInspect={setInspection} layers={layers} />
+                <Moon3DView
+                  onToggle2D={() => setMapMode("2d")}
+                  onInspect={setInspection}
+                  layers={layers}
+                  project={activeProject}
+                />
               )}
             </div>
             <div className="mission-dock">
               <LayerControl layers={layers} onChange={setLayers} />
               <PlannerPanel
+                project={activeProject}
                 maxSlopeLimit={layers.maxSlopeLimit}
                 onMaxSlopeChange={(val) => setLayers((l) => ({ ...l, maxSlopeLimit: Math.round(val), showHazard: true }))}
               />
@@ -154,11 +185,12 @@ export const App: React.FC = () => {
         {activeTab === "moon3d" && (
           <div className="mission-deck w-full" style={{ width: "100%" }}>
             <div className="mission-viewport">
-              <Moon3DView onInspect={setInspection} layers={layers} />
+              <Moon3DView onInspect={setInspection} layers={layers} project={activeProject} />
             </div>
             <div className="mission-dock">
               <LayerControl layers={layers} onChange={setLayers} />
               <PlannerPanel
+                project={activeProject}
                 maxSlopeLimit={layers.maxSlopeLimit}
                 onMaxSlopeChange={(val) => setLayers((l) => ({ ...l, maxSlopeLimit: Math.round(val), showHazard: true }))}
               />

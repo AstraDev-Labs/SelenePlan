@@ -11,6 +11,7 @@ import {
   Globe
 } from "lucide-react";
 import { useAuthStore } from "@/auth/store";
+import { getProjectConfig } from "@/features/projects/projectConfig";
 
 interface NavbarProps {
   activeTab: string;
@@ -19,6 +20,7 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
   const { user, isAuthenticated, logout, hasRole, activeProjectId, setActiveProject } = useAuthStore();
+  const projectConfig = getProjectConfig(activeProjectId);
 
   const navItems = [
     { id: "map", label: "Polar Map", icon: Compass, roles: ["analyst", "operator", "admin", "approver", "steward", "auditor"] },
@@ -52,7 +54,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
                 LUNAR MISSION OS
               </span>
             </div>
-            <p className="text-[10px] text-gray-400 font-mono tracking-wider mt-0.5">SHACKLETON POLAR AOI</p>
+            <p className="text-[10px] text-cyan-400 font-mono tracking-wider mt-0.5 font-semibold">
+              {projectConfig.aoiLabel}
+            </p>
           </div>
         </div>
 
@@ -64,7 +68,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
             aria-label="Active Mission Project"
             value={activeProjectId}
             onChange={(e) => setActiveProject(e.target.value)}
-            className="bg-gray-900 border border-white/10 rounded px-2.5 py-1 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-400"
+            className="bg-gray-900 border border-cyan-500/40 rounded px-2.5 py-1 text-xs text-cyan-300 font-mono focus:outline-none focus:border-cyan-400 cursor-pointer shadow-sm shadow-cyan-500/10"
           >
             <option value="00000000-0000-0000-0000-000000000001">Artemis-3 (Shackleton)</option>
             <option value="00000000-0000-0000-0000-000000000002">VIPER-Extended (Nobile)</option>

@@ -2,16 +2,16 @@ import React, { useRef, useEffect, useState, useCallback } from "react";
 import { LayerState } from "./LayerControl";
 import { PointInspection } from "./InspectorPanel";
 import { ZoomIn, ZoomOut, RotateCcw, Navigation2, MapPin, Target, X, Globe, Moon } from "lucide-react";
+import { ProjectConfig, MISSION_PROJECTS } from "../projects/projectConfig";
 
 interface PolarMapProps {
   layers: LayerState;
   onInspect: (data: PointInspection | null) => void;
   currentStep?: number;
   onToggle3D?: () => void;
+  project?: ProjectConfig;
 }
 
-// 20 km x 20 km Shackleton AOI extent (+/- 10 km from South Pole)
-const EXTENT_M = 10000.0;
 const TOTAL_STEPS = 708;
 
 // Simulated ML Detected Craters with diverse confidence spectrum (48% to 94%)
@@ -24,20 +24,17 @@ const SIMULATED_ML_CRATERS = [
   { x: 2100, y: -800, r: 250, conf: 0.48, name: "Crater Zeta (ML 48%)" },
 ];
 
-// Planned Rover Traverse Waypoints
-const MISSION_WAYPOINTS = [
-  { id: "WP-0", label: "LANDER-ALPHA", x: -2600, y: -800, elev: -790, type: "start" },
-  { id: "WP-1", label: "RIDGE-SPINE", x: -2100, y: 300, elev: -840, type: "waypoint" },
-  { id: "WP-2", label: "SHACKLETON-CREST", x: -1500, y: 1400, elev: -910, type: "science" },
-  { id: "WP-3", label: "PSR-EDGE", x: -600, y: 1750, elev: -1600, type: "target" },
-];
-
 export const PolarMap: React.FC<PolarMapProps> = ({
   layers,
   onInspect,
   currentStep = 0,
   onToggle3D,
+  project,
 }) => {
+  const activeProject = project || MISSION_PROJECTS["00000000-0000-0000-0000-000000000001"];
+  const extentM = activeProject.extentM;
+  const waypoints = activeProject.waypoints;
+
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const terrainCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [zoom, setZoom] = useState<number>(1.0);
@@ -52,6 +49,14 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   const dragDistanceRef = useRef<number>(0);
   const mouseRafRef = useRef<number | null>(null);
 
+  // Reset pan, zoom, and pin on project switch
+  useEffect(() => {
+    setPan({ x: 0, y: 0 });
+    setZoom(1.0);
+    setPinnedPoint(null);
+    pinnedInspectionRef.current = null;
+    onInspect(null);
+  }, [activeProject.id, onInspect]);
   // Native non-passive wheel listener: smooth map zoom without scrolling the window
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,44 +75,22 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     };
   }, []);
 
-  // Analytic High-Fidelity Shackleton DEM profile generator with calibrated lunar slopes
-  const getElevationAt = useCallback((xM: number, yM: number) => {
-    const distSq = xM * xM + yM * yM;
-    const dist = Math.sqrt(distSq);
-
-    // Shackleton Crater Morphology
-    // Basin Floor: r <= 850m, gentle bowl (slopes 1° to 6° -> SAFE)
-    // Inner Scarp Wall: 850m < r <= 2100m, steep regolith slope (slopes 25° to 45° -> HAZARD)
-    // Rim Crest: r ~ 2100m, ridge peak (slopes 0° to 5° -> SAFE)
-    // Outer Ejecta & Highlands: r > 2100m, rolling polar plains (slopes 3° to 7° -> SAFE)
-    const zFloor = -4180.0;
-    const zRim = -3300.0;
-    const zPlain = -3750.0;
-    const rFloor = 850.0;
-    const rRim = 2100.0;
-
-    let baseElev: number;
-    if (dist <= rFloor) {
-      const normR = dist / rFloor;
-      baseElev = zFloor + 50.0 * (normR * normR);
-    } else if (dist <= rRim) {
-      const t = (dist - rFloor) / (rRim - rFloor);
-      const s = 3.0 * t * t - 2.0 * t * t * t; // smoothstep S-curve
-      baseElev = (zFloor + 50.0) + (zRim - (zFloor + 50.0)) * s;
-    } else {
-      const dr = dist - rRim;
-      const decay = Math.exp(-Math.pow(dr / 3600.0, 1.25));
-      baseElev = zPlain + (zRim - zPlain) * decay;
+  // Project-Aware Permanently Shadowed Region (PSR) Detector
+  const isPSRAt = useCallback((xM: number, yM: number) => {
+    if (activeProject.id === "00000000-0000-0000-0000-000000000002") {
+      // Nobile crater basin cold trap (eastern sector in Nobile AOI)
+      const d = Math.hypot(xM - 2800, yM - 1800);
+      return d < 2400;
     }
+    // Shackleton crater floor
+    return Math.hypot(xM, yM) < 1850;
+  }, [activeProject.id]);
 
-    // Connecting Ridge Spine elevation boost along the traversable ridge (x ~ -2200m)
-    const rx = (xM - (-2200.0)) / 1100.0;
-    const ry = yM / 4500.0;
-    const ridgeDistSq = rx * rx + ry * ry;
-    const ridgeBoost = 180.0 * Math.exp(-ridgeDistSq);
+  // Project-Driven High-Fidelity Analytic DEM profile generator with calibrated lunar slopes
+  const getElevationAt = useCallback((xM: number, yM: number) => {
+    let baseElev = activeProject.elevationProfile(xM, yM);
 
     // Secondary micro-craters
-    let craterDent = 0;
     for (let i = 0; i < SIMULATED_ML_CRATERS.length; i++) {
       const c = SIMULATED_ML_CRATERS[i];
       const dx = xM - c.x;
@@ -116,12 +99,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       if (dSq < c.r * c.r) {
         const d = Math.sqrt(dSq);
         const ratio = 1 - d / c.r;
-        craterDent += (c.r * 0.16) * (ratio * ratio);
+        baseElev -= (c.r * 0.16) * (ratio * ratio);
       }
     }
 
-    return baseElev + ridgeBoost - craterDent;
-  }, []);
+    return baseElev;
+  }, [activeProject]);
 
   // Physically grounded slope
   const getSlopeAt = useCallback((xM: number, yM: number) => {
@@ -158,30 +141,47 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   }, []);
 
   const isPointLit = useCallback((xM: number, yM: number, step: number) => {
-    const dist = Math.sqrt(xM * xM + yM * yM);
+    const isPSR = isPSRAt(xM, yM);
+    if (isPSR) return false;
     const { el } = getSunGeometryAt(step);
-    if (dist < 1850.0) return false;
+    if (activeProject.id === "00000000-0000-0000-0000-000000000002") {
+      // Mons Mouton plateau enjoys prolonged high illumination
+      if (xM < -1000) return el > -0.4;
+      return el > 0.3;
+    }
+    const dist = Math.sqrt(xM * xM + yM * yM);
     if (dist >= 1950.0 && dist <= 2350.0) {
       return el > -0.2;
     }
     return el > 0.4;
-  }, [getSunGeometryAt]);
+  }, [activeProject.id, getSunGeometryAt, isPSRAt]);
 
   const isPointEarthVisible = useCallback((xM: number, yM: number) => {
-    const dist = Math.sqrt(xM * xM + yM * yM);
-    return dist >= 1850.0;
-  }, []);
+    return !isPSRAt(xM, yM);
+  }, [isPSRAt]);
 
   // Compute full PointInspection payload for any lunar coordinate (xM, yM)
   const computePointInspection = useCallback((xM: number, yM: number): PointInspection => {
     const slope = getSlopeAt(xM, yM);
     const elev = getElevationAt(xM, yM);
     const distM = Math.sqrt(xM * xM + yM * yM);
-    const lat = 90.0 - distM / 30300.0;
-    const lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
+
+    // Accurate lat/lon projection based on project's center coordinate
+    let lat: number;
+    let lon: number;
+    if (activeProject.id === "00000000-0000-0000-0000-000000000002") {
+      // Nobile AOI: center is -85.2°S, 53.5°E
+      lat = activeProject.centerLat + (yM / 30300.0);
+      lon = activeProject.centerLon + (xM / (30300.0 * Math.cos((Math.abs(lat) * Math.PI) / 180.0)));
+    } else {
+      // Shackleton AOI: centered at South Pole
+      lat = 90.0 - distM / 30300.0;
+      lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
+    }
+
     const lit = isPointLit(xM, yM, currentStep);
     const earthVis = isPointEarthVisible(xM, yM);
-    const isPSR = distM < 1850.0;
+    const isPSR = isPSRAt(xM, yM);
     const mlHazard = getMLHazardAt(xM, yM);
     const isTerrainHazard = slope > layers.maxSlopeLimit;
     const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
@@ -199,6 +199,16 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const litCount = sunSeries.filter(Boolean).length;
     const litFrac = isPSR ? 0.0 : litCount / sunSeries.length;
 
+    let featureName = activeProject.targetFeature;
+    if (activeProject.id === "00000000-0000-0000-0000-000000000002") {
+      if (xM < -1500) featureName = "Mons Mouton Massif Plateau";
+      else if (isPSR) featureName = "Nobile Crater PSR Floor";
+      else if (xM > 1200) featureName = "Nobile Crater Rim / Scarp";
+      else featureName = "Nobile Ridge Transition";
+    } else {
+      featureName = distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge";
+    }
+
     return {
       x_m: xM,
       y_m: yM,
@@ -209,22 +219,22 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       aspect_deg: (Math.atan2(xM, yM) * 180.0) / Math.PI,
       roughness_m: tri,
       is_hazard: isTerrainHazard,
-      feature_name: distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge",
+      feature_name: featureName,
       is_lit: lit,
       lit_fraction: litFrac,
       longest_dark_hours: isPSR ? 708.0 : (1.0 - litFrac) * 48.0,
       is_psr: isPSR,
       time_series: sunSeries,
       earth_visible: earthVis,
-      earth_elevation_deg: 2.37,
-      earth_visible_fraction: isPSR ? 0.0 : 0.88,
+      earth_elevation_deg: activeProject.id === "00000000-0000-0000-0000-000000000002" ? 5.2 : 2.37,
+      earth_visible_fraction: isPSR ? 0.0 : 0.94,
       longest_blackout_hours: isPSR ? 708.0 : 12.0,
       earth_series: earthSeries,
       ml_hazard_detected: mlHazard.detected,
       ml_confidence: mlHazard.confidence,
       fused_hazard: isFusedHazard,
     };
-  }, [currentStep, getElevationAt, getMLHazardAt, getSlopeAt, isPointEarthVisible, isPointLit, layers.maxSlopeLimit, layers.mlConfidenceThreshold]);
+  }, [activeProject, currentStep, getElevationAt, getMLHazardAt, getSlopeAt, isPSRAt, isPointEarthVisible, isPointLit, layers.maxSlopeLimit, layers.mlConfidenceThreshold]);
 
   // =========================================================================
   // Compute & Cache Terrain Raster: Crisp 1x1 Native Resolution Photographic Moon Surface
@@ -246,7 +256,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const tCtx = tCanvas.getContext("2d");
     if (!tCtx) return;
 
-    const scale = (EXTENT_M * 2) / width;
+    const scale = (extentM * 2) / width;
     const imgData = tCtx.createImageData(width, height);
     const data = imgData.data;
 
@@ -270,8 +280,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const xM = (px - width / 2) * scale;
 
         const elev = getElevationAt(xM, yM);
-        const distSq = xM * xM + yM * yM;
-        const distM = Math.sqrt(distSq);
 
         // Elevation gradients for Surface Normal
         const zE = getElevationAt(xM + delta, yM);
@@ -292,12 +300,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         // Realistic Lunar Hillshade (Hapke / Lommel-Seeliger scattering model)
         const dot = nx * sunX + ny * sunY + nz * sunZ;
         const directShade = dot > 0 ? dot : 0;
-        const isPSR = distM < 1850.0;
+        const isPSR = isPSRAt(xM, yM);
         const ambient = isPSR ? 0.02 : 0.12;
         const shade = Math.min(1.0, ambient + directShade * 0.88);
 
         // Authentic Lunar Regolith Grayscale Palette (NASA LROC / Clementine standard)
-        // Regolith base: charcoal/slate basalt to bright anorthosite highlands
         let r: number, g: number, b: number;
 
         if (isPSR) {
@@ -313,16 +320,13 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           b = Math.min(255, lunarIntensity + 3);
 
           // Anorthosite high rim brightening
-          if (elev > -3400) {
+          const isHighElevation = activeProject.id === "00000000-0000-0000-0000-000000000002" ? elev > 5000 : elev > -3400;
+          if (isHighElevation) {
             r = Math.min(255, r + 15);
             g = Math.min(255, g + 15);
             b = Math.min(255, b + 18);
           }
         }
-
-        // ===================================================================
-        // OPTIONAL THEMATIC GIS OVERLAYS (Only when toggled by user!)
-        // ===================================================================
 
         // 1. Terrain Ruggedness Index (TRI)
         const tri = (Math.abs(zE - elev) + Math.abs(zW - elev) + Math.abs(zN - elev) + Math.abs(zS - elev)) * 0.25;
@@ -330,7 +334,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         if (layers.showRoughness) {
           const normTRI = Math.min(1.0, tri / 2.2);
           const [rr, rg, rb] = getRoughnessColor(normTRI);
-          // Modulate with topography
           const trAlpha = 0.65;
           r = Math.round(rr * trAlpha + r * (1 - trAlpha));
           g = Math.round(rg * trAlpha + g * (1 - trAlpha));
@@ -356,12 +359,10 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         if (layers.showIllumination) {
           const lit = isPointLit(xM, yM, currentStep);
           if (lit) {
-            // Subtle warm solar highlight on sunlit ground
             r = Math.min(255, Math.round(r * 1.1 + 35));
             g = Math.min(255, Math.round(g * 1.08 + 25));
             b = Math.min(255, Math.round(b * 0.95));
           } else {
-            // Shadow zone dampening
             r = Math.round(r * 0.5);
             g = Math.round(r * 0.5);
             b = Math.round(b * 0.6);
@@ -381,8 +382,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           }
         }
 
-        // 5. Permanent Shadow Region (PSR) Subtle Contour
-        // 5. Permanent Shadow Region (PSR) High-Contrast Cryogenic Overlay
+        // 5. Permanent Shadow Region (PSR) Cryogenic Overlay
         if (layers.showPSR && isPSR) {
           r = 99; g = 102; b = 241;
         }
@@ -410,7 +410,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
     tCtx.putImageData(imgData, 0, 0);
     renderScene();
-  }, [layers, currentStep, getElevationAt, getMLHazardAt, getSunGeometryAt, isPointLit]);
+  }, [layers, currentStep, getElevationAt, getMLHazardAt, getSunGeometryAt, isPointLit, extentM, activeProject.id, isPSRAt]);
 
   // Fast GPU Blit Scene Render
   const renderScene = useCallback(() => {
@@ -422,7 +422,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
     const width = canvas.width;
     const height = canvas.height;
-    const scale = (EXTENT_M * 2) / width;
+    const scale = (extentM * 2) / width;
 
     ctx.clearRect(0, 0, width, height);
 
@@ -451,7 +451,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       ctx.fillText(`${(rM / 1000).toFixed(0)} km`, rPx + 4, -4);
     }
 
-    // Central Crosshair passing through South Pole (0, 0)
+    // Central Crosshair passing through AOI Center
     ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
     ctx.beginPath();
     ctx.moveTo(0, -height);
@@ -483,7 +483,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         ctx.lineWidth = 1;
         const text = c.name;
         ctx.font = "10px 'JetBrains Mono', monospace";
-        const tw = ctx.measureText(text).width;
+        const tw = (ctx.measureText && ctx.measureText(text)?.width) || 70;
         ctx.fillRect(px - rPx, py - rPx - 18, tw + 8, 14);
         ctx.strokeRect(px - rPx, py - rPx - 18, tw + 8, 14);
 
@@ -492,13 +492,13 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       }
     }
 
-    // Clean Aerospace Rover Traverse Route (Crisp static line, no animated jitter!)
+    // Clean Aerospace Rover Traverse Route (Crisp static line, project-driven waypoints)
     ctx.save();
     ctx.strokeStyle = "rgba(14, 165, 233, 0.35)";
     ctx.lineWidth = 5;
     ctx.beginPath();
-    for (let i = 0; i < MISSION_WAYPOINTS.length; i++) {
-      const wp = MISSION_WAYPOINTS[i];
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i];
       const px = wp.x / scale;
       const py = -wp.y / scale;
       if (i === 0) ctx.moveTo(px, py);
@@ -511,8 +511,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.stroke();
 
     // Waypoints
-    for (let i = 0; i < MISSION_WAYPOINTS.length; i++) {
-      const wp = MISSION_WAYPOINTS[i];
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i];
       const px = wp.x / scale;
       const py = -wp.y / scale;
 
@@ -531,8 +531,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
       ctx.lineWidth = 1;
       ctx.font = "10px 'JetBrains Mono', monospace";
-      const wLabel = `${wp.label} (${wp.elev}m)`;
-      const lw = ctx.measureText(wLabel).width;
+      const wLabel = `${wp.label} (${wp.elev > 0 ? `+${wp.elev}` : wp.elev}m)`;
+      const lw = (ctx.measureText && ctx.measureText(wLabel)?.width) || 75;
       ctx.fillRect(px + 10, py - 14, lw + 8, 16);
       ctx.strokeRect(px + 10, py - 14, lw + 8, 16);
 
@@ -590,7 +590,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       ctx.lineWidth = 1;
       ctx.font = "bold 10px 'JetBrains Mono', monospace";
       const pinText = `INSPECTED: (${Math.round(pinnedPoint.xM)}m, ${Math.round(pinnedPoint.yM)}m | ${Math.round(pinnedPoint.elev)}m)`;
-      const ptw = ctx.measureText(pinText).width;
+      const ptw = (ctx.measureText && ctx.measureText(pinText)?.width) || 90;
       ctx.fillRect(pinPx - ptw / 2 - 6, pinPy - 36, ptw + 12, 18);
       ctx.strokeRect(pinPx - ptw / 2 - 6, pinPy - 36, ptw + 12, 18);
 
@@ -599,18 +599,26 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       ctx.restore();
     }
 
-    // Geographic Feature Labels
+    // Geographic Feature Labels (Project-Specific)
     ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     ctx.font = "bold 12px 'Space Grotesk', sans-serif";
     ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
     ctx.shadowBlur = 6;
-    ctx.fillText("Shackleton Crater (Rim)", 15, -85);
-    ctx.fillText("South Pole (90.00°S)", 8, 18);
-
-    ctx.fillStyle = "rgba(203, 213, 225, 0.9)";
-    ctx.font = "10px 'Space Grotesk', sans-serif";
-    ctx.fillText("Connecting Ridge", -230, 90);
-    ctx.fillText("Shackleton Crater Floor (-4,200m)", -105, -12);
+    if (activeProject.id === "00000000-0000-0000-0000-000000000002") {
+      ctx.fillText("Mons Mouton Massif (+6,100m)", -260, -90);
+      ctx.fillText("VIPER Landing Site", -240, 60);
+      ctx.fillStyle = "rgba(203, 213, 225, 0.9)";
+      ctx.font = "10px 'Space Grotesk', sans-serif";
+      ctx.fillText("Nobile Crater Basin (-1,800m)", 40, -10);
+      ctx.fillText("Nobile Comms Ridge (+4,800m)", -80, 110);
+    } else {
+      ctx.fillText("Shackleton Crater (Rim)", 15, -85);
+      ctx.fillText("South Pole (90.00°S)", 8, 18);
+      ctx.fillStyle = "rgba(203, 213, 225, 0.9)";
+      ctx.font = "10px 'Space Grotesk', sans-serif";
+      ctx.fillText("Connecting Ridge", -230, 90);
+      ctx.fillText("Shackleton Crater Floor (-4,180m)", -105, -12);
+    }
     ctx.shadowBlur = 0;
 
     // Sun Vector Arrow
@@ -638,7 +646,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.fillText(`SUN AZ ${sunGeom.az.toFixed(0)}°`, arrowStartX - 28, arrowStartY - 10);
 
     ctx.restore();
-  }, [pan, zoom, layers, currentStep, pinnedPoint, getSunGeometryAt]);
+  }, [pan, zoom, layers, currentStep, pinnedPoint, getSunGeometryAt, extentM, activeProject.id, waypoints]);
 
   // Redraw when pan, zoom, or pinnedPoint changes
   useEffect(() => {
@@ -658,14 +666,14 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const bx = (clientX - rect.left) * scaleX;
     const by = (clientY - rect.top) * scaleY;
 
-    const scale = (EXTENT_M * 2) / canvas.width;
+    const scale = (extentM * 2) / canvas.width;
     const dx = (bx - (canvas.width / 2 + pan.x)) / zoom;
     const dy = (by - (canvas.height / 2 + pan.y)) / zoom;
     const xM = dx * scale;
     const yM = -dy * scale;
 
     return { bx, by, xM, yM };
-  }, [pan.x, pan.y, zoom]);
+  }, [pan.x, pan.y, zoom, extentM]);
 
   // Canvas Click Handler: PINS inspected terrain pixel at exact click location
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -781,11 +789,15 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         <div className="absolute top-4 left-4 glass-panel px-3.5 py-2.5 flex flex-col gap-1.5 text-[11px] font-mono pointer-events-none">
           <div className="flex items-center gap-2 text-sky-300 font-bold">
             <Moon className="w-4 h-4 text-sky-400" />
-            <span>MOON: SOUTH POLE SURFACE MAP</span>
+            <span>MOON: {activeProject.aoiLabel}</span>
           </div>
           <div className="flex items-center gap-2 text-emerald-300 text-[10px]">
             <Globe className="w-3.5 h-3.5 text-emerald-400" />
-            <span>↑ 0° LON: TOWARDS EARTH (LOS)</span>
+            <span>
+              {activeProject.id === "00000000-0000-0000-0000-000000000002"
+                ? `CENTER: ${Math.abs(activeProject.centerLat).toFixed(1)}°S, ${activeProject.centerLon.toFixed(1)}°E • MONS MOUTON`
+                : "↑ 0° LON: TOWARDS EARTH (LOS)"}
+            </span>
           </div>
           <div className="text-gray-400 flex items-center gap-2 text-[10px]">
             <span>CRS: IAU_2015:30100</span>
@@ -897,7 +909,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           )}
         </div>
 
-        {/* Bottom-Right: Metric Scale Bar & Farside Orientation Indicator */}
+        {/* Bottom-Right: Metric Scale Bar & Orientation Indicator */}
         <div className="absolute bottom-4 right-4 glass-panel px-3 py-1.5 text-[10px] font-mono text-gray-300 flex flex-col items-end pointer-events-none">
           <div className="flex items-center gap-1 mb-1">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
@@ -907,9 +919,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
             <div className="h-1.5 bg-sky-400/80 border border-white/40 rounded-sm w-20 relative">
               <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white/60" />
             </div>
-            <span className="text-white font-semibold">2.0 km</span>
+            <span className="text-white font-semibold">{((extentM * 0.4) / 1000).toFixed(1)} km</span>
           </div>
-          <span className="text-[9px] text-gray-400">↓ 180° Lon (Lunar Farside)</span>
+          <span className="text-[9px] text-gray-400">
+            {activeProject.id === "00000000-0000-0000-0000-000000000002" ? "→ 90° East Grid" : "↓ 180° Lon (Lunar Farside)"}
+          </span>
         </div>
       </div>
     </div>
