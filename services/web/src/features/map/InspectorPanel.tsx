@@ -48,7 +48,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
     );
   }
 
-  const isFusedHazard = inspection.fused_hazard ?? (inspection.is_hazard || (inspection.ml_hazard_detected && (inspection.ml_confidence ?? 0) >= 0.60));
+  const isFusedHazard = inspection.fused_hazard ?? (inspection.is_hazard || Boolean(inspection.ml_hazard_detected));
 
   return (
     <div className="glass-panel p-4 w-full flex flex-col gap-3 text-xs font-mono">

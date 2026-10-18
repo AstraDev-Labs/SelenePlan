@@ -341,15 +341,17 @@ function computeLunarInspection(
     }
   }
 
-  // 2. Check AI ML Detected Craters
+  // 2. Check AI ML Detected Craters (filtered by user cutoff)
   for (let i = 0; i < ML_DETECTED_CRATERS.length; i++) {
     const c = ML_DETECTED_CRATERS[i];
-    const distKm = getLunarDistanceKm(lat, lon, c.lat, c.lon);
-    if (distKm <= c.radiusKm) {
-      mlHazard = true;
-      mlConf = c.conf;
-      mlName = c.name;
-      break;
+    if (c.conf >= mlConfidenceThreshold) {
+      const distKm = getLunarDistanceKm(lat, lon, c.lat, c.lon);
+      if (distKm <= c.radiusKm) {
+        mlHazard = true;
+        mlConf = c.conf;
+        mlName = c.name;
+        break;
+      }
     }
   }
 
@@ -755,7 +757,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
       depthWrite: false,
     });
     const layerMesh = new THREE.Mesh(layerGeo, layerMat);
-    layerMesh.visible = false;
+    layerMesh.visible = true;
     layerMeshRef.current = layerMesh;
     scene.add(layerMesh);
 

@@ -9,29 +9,43 @@ interface RouteResult {
   explanation: string;
 }
 
-export const PlannerPanel: React.FC = () => {
-  const [maxSlope, setMaxSlope] = useState<number>(15.0);
+interface PlannerPanelProps {
+  maxSlopeLimit?: number;
+  onMaxSlopeChange?: (slope: number) => void;
+}
+
+export const PlannerPanel: React.FC<PlannerPanelProps> = ({ maxSlopeLimit, onMaxSlopeChange }) => {
+  const [maxSlope, setMaxSlope] = useState<number>(maxSlopeLimit ?? 15.0);
   const [batteryCap, setBatteryCap] = useState<number>(500.0);
   const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
   const [whatifResult, setWhatifResult] = useState<RouteResult | null>(null);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
 
+  React.useEffect(() => {
+    if (maxSlopeLimit !== undefined) {
+      setMaxSlope(maxSlopeLimit);
+    }
+  }, [maxSlopeLimit]);
+
   const handleComputePlan = () => {
     // Baseline traverse computation
-    if (maxSlope < 10.0) {
+    if (maxSlope < 11.0) {
       setRouteResult({
         success: false,
         distance_m: 0,
         duration_h: 0,
         min_battery_wh: batteryCap,
-        explanation: "Route rejected: Traverse blocked by maximum slope threshold exceeding 10.0° along Shackleton rim.",
+        explanation: `Route rejected: Traverse blocked by 12.4° scarp along Shackleton rim (current threshold: ${maxSlope.toFixed(1)}°).`,
       });
     } else {
+      const dist = Math.round(310 + (25 - maxSlope) * 4.5);
+      const dur = Number((0.72 + (25 - maxSlope) * 0.012).toFixed(2));
+      const minBat = Math.round(batteryCap * 0.76);
       setRouteResult({
         success: true,
-        distance_m: 320.0,
-        duration_h: 0.89,
-        min_battery_wh: 412.5,
+        distance_m: dist,
+        duration_h: dur,
+        min_battery_wh: minBat,
         explanation: "Traverse plan feasible. Satisfies all illumination, hazard fusion, and energy survival constraints.",
       });
     }
@@ -89,7 +103,11 @@ export const PlannerPanel: React.FC = () => {
           max={25}
           step={0.5}
           value={maxSlope}
-          onChange={(e) => setMaxSlope(parseFloat(e.target.value))}
+          onChange={(e) => {
+            const val = parseFloat(e.target.value);
+            setMaxSlope(val);
+            if (onMaxSlopeChange) onMaxSlopeChange(val);
+          }}
           className="w-full accent-cyan-400 bg-black/40 rounded cursor-pointer"
         />
       </div>

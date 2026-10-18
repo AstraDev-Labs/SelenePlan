@@ -14,12 +14,14 @@ interface PolarMapProps {
 const EXTENT_M = 10000.0;
 const TOTAL_STEPS = 708;
 
-// Simulated ML Detected Craters (advisory obstacles in Shackleton perimeter)
+// Simulated ML Detected Craters with diverse confidence spectrum (48% to 94%)
 const SIMULATED_ML_CRATERS = [
-  { x: 1400, y: 1600, r: 280, conf: 0.88, name: "Crater Alpha (ML 88%)" },
-  { x: -1800, y: 800, r: 220, conf: 0.82, name: "Crater Beta (ML 82%)" },
-  { x: 500, y: -2200, r: 310, conf: 0.79, name: "Crater Gamma (ML 79%)" },
-  { x: -1200, y: -1900, r: 190, conf: 0.84, name: "Crater Delta (ML 84%)" },
+  { x: 1400, y: 1600, r: 280, conf: 0.94, name: "Crater Alpha (ML 94%)" },
+  { x: -1800, y: 800, r: 220, conf: 0.88, name: "Crater Beta (ML 88%)" },
+  { x: -1200, y: -1900, r: 190, conf: 0.82, name: "Crater Gamma (ML 82%)" },
+  { x: 500, y: -2200, r: 310, conf: 0.75, name: "Crater Delta (ML 75%)" },
+  { x: -800, y: 2400, r: 210, conf: 0.65, name: "Crater Epsilon (ML 65%)" },
+  { x: 2100, y: -800, r: 250, conf: 0.48, name: "Crater Zeta (ML 48%)" },
 ];
 
 // Planned Rover Traverse Waypoints
@@ -137,15 +139,17 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   }, [getElevationAt]);
 
   const getMLHazardAt = useCallback((xM: number, yM: number) => {
+    const cutoff = layers.mlConfidenceThreshold;
     for (let i = 0; i < SIMULATED_ML_CRATERS.length; i++) {
       const c = SIMULATED_ML_CRATERS[i];
+      if (c.conf < cutoff) continue;
       const d = Math.hypot(xM - c.x, yM - c.y);
       if (d <= c.r) {
         return { detected: true, confidence: c.conf * (1.0 - 0.2 * (d / c.r)), name: c.name };
       }
     }
     return { detected: false, confidence: 0.0, name: "" };
-  }, []);
+  }, [layers.mlConfidenceThreshold]);
 
   const getSunGeometryAt = useCallback((step: number) => {
     const az = (step * 5.0) % 360.0;
@@ -378,10 +382,9 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         }
 
         // 5. Permanent Shadow Region (PSR) Subtle Contour
+        // 5. Permanent Shadow Region (PSR) High-Contrast Cryogenic Overlay
         if (layers.showPSR && isPSR) {
-          r = Math.round(r * 0.4 + 20);
-          g = Math.round(g * 0.4 + 35);
-          b = Math.round(b * 0.4 + 110);
+          r = 99; g = 102; b = 241;
         }
 
         // 6. Hazard Overlays (Fused, Slope, or ML)
@@ -390,17 +393,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
 
         if (layers.showFusedHazard && (isTerrainHazard || isMLHazard)) {
-          r = Math.min(255, Math.round(r * 0.45 + 160));
-          g = Math.round(g * 0.4 + 40);
-          b = Math.round(b * 0.4 + 30);
+          r = 245; g = 158; b = 11; // Electric Amber
         } else if (layers.showHazard && isTerrainHazard) {
-          r = Math.min(255, Math.round(r * 0.45 + 145));
-          g = Math.round(g * 0.35 + 30);
-          b = Math.round(b * 0.35 + 30);
+          r = 239; g = 68; b = 68; // Bold Crimson Red
         } else if (layers.showMLHazard && isMLHazard) {
-          r = Math.min(255, Math.round(r * 0.45 + 130));
-          g = Math.round(g * 0.35 + 25);
-          b = Math.min(255, Math.round(b * 0.45 + 145));
+          r = 217; g = 70; b = 239; // Bold Fuchsia
         }
 
         const idx = rowOffset + px * 4;
@@ -468,6 +465,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     if (layers.showMLHazard || layers.showFusedHazard) {
       for (let i = 0; i < SIMULATED_ML_CRATERS.length; i++) {
         const c = SIMULATED_ML_CRATERS[i];
+        if (c.conf < layers.mlConfidenceThreshold) continue;
         const px = c.x / scale;
         const py = -c.y / scale;
         const rPx = c.r / scale;

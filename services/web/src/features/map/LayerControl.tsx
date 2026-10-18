@@ -166,8 +166,15 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
       {/* ML Confidence Threshold Slider */}
       <div className="flex flex-col gap-1.5 border-t border-white/10 pt-3">
         <div className="flex justify-between items-center text-[11px] text-gray-300">
-          <label htmlFor="ml-confidence-range">ML Confidence Cutoff</label>
-          <span className="font-mono text-fuchsia-300">{Math.round(layers.mlConfidenceThreshold * 100)}%</span>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="ml-confidence-range">ML Confidence Cutoff</label>
+            {(layers.showMLHazard || layers.showFusedHazard) && (
+              <span className="text-[10px] text-fuchsia-400 font-mono bg-fuchsia-500/10 px-1.5 py-0.5 rounded border border-fuchsia-500/30 font-semibold">
+                ACTIVE
+              </span>
+            )}
+          </div>
+          <span className="font-mono text-fuchsia-300 font-bold">{Math.round(layers.mlConfidenceThreshold * 100)}%</span>
         </div>
         <input
           id="ml-confidence-range"
@@ -176,7 +183,7 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
           max="0.95"
           step="0.05"
           value={layers.mlConfidenceThreshold}
-          onChange={(e) => onChange({ ...layers, mlConfidenceThreshold: Number(e.target.value) })}
+          onChange={(e) => onChange({ ...layers, mlConfidenceThreshold: Number(e.target.value), showMLHazard: true })}
           className="w-full accent-fuchsia-400 cursor-pointer"
         />
         <div className="flex justify-between text-[10px] text-gray-500 font-mono">
@@ -234,8 +241,15 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
       {/* Threshold Slider */}
       <div className="flex flex-col gap-1.5 border-t border-white/10 pt-3">
         <div className="flex justify-between items-center text-[11px] text-gray-300">
-          <label htmlFor="slope-limit-range">Max Traversable Slope</label>
-          <span className="font-mono text-cyan-300">{layers.maxSlopeLimit}&deg;</span>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="slope-limit-range">Max Traversable Slope</label>
+            {(layers.showHazard || layers.showFusedHazard) && (
+              <span className="text-[10px] text-rose-400 font-mono bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/30 font-semibold">
+                ACTIVE
+              </span>
+            )}
+          </div>
+          <span className="font-mono text-cyan-300 font-bold">{layers.maxSlopeLimit}&deg;</span>
         </div>
         <input
           id="slope-limit-range"
@@ -244,7 +258,7 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
           max="35"
           step="1"
           value={layers.maxSlopeLimit}
-          onChange={(e) => onChange({ ...layers, maxSlopeLimit: Number(e.target.value) })}
+          onChange={(e) => onChange({ ...layers, maxSlopeLimit: Number(e.target.value), showHazard: true })}
           className="w-full accent-cyan-400 cursor-pointer"
         />
         <div className="flex justify-between text-[10px] text-gray-500 font-mono">

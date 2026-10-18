@@ -142,7 +142,10 @@ export const App: React.FC = () => {
             </div>
             <div className="mission-dock">
               <LayerControl layers={layers} onChange={setLayers} />
-              <PlannerPanel />
+              <PlannerPanel
+                maxSlopeLimit={layers.maxSlopeLimit}
+                onMaxSlopeChange={(val) => setLayers((l) => ({ ...l, maxSlopeLimit: Math.round(val), showHazard: true }))}
+              />
               <InspectorPanel inspection={inspection} />
             </div>
           </div>
@@ -155,7 +158,10 @@ export const App: React.FC = () => {
             </div>
             <div className="mission-dock">
               <LayerControl layers={layers} onChange={setLayers} />
-              <PlannerPanel />
+              <PlannerPanel
+                maxSlopeLimit={layers.maxSlopeLimit}
+                onMaxSlopeChange={(val) => setLayers((l) => ({ ...l, maxSlopeLimit: Math.round(val), showHazard: true }))}
+              />
               <InspectorPanel inspection={inspection} />
             </div>
           </div>
