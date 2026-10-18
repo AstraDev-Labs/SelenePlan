@@ -37,9 +37,9 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
       {/* Brand & Project Selector */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500/20 to-blue-600/30 border border-sky-400/40 flex items-center justify-center shadow-lg shadow-sky-500/20 backdrop-blur-sm relative overflow-hidden group">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500/20 to-blue-600/30 border border-sky-400/40 flex items-center justify-center shadow-lg shadow-sky-500/20 backdrop-blur-sm relative overflow-hidden group shrink-0" style={{ width: 36, height: 36, minWidth: 36 }}>
             <div className="absolute inset-0 bg-sky-400/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <img src="/moon.svg" alt="SelenePlan Lunar Emblem" className="w-6 h-6 object-contain drop-shadow" />
+            <img src="/moon.svg" alt="SelenePlan Lunar Emblem" className="brand-emblem object-contain drop-shadow" style={{ width: 26, height: 26, maxWidth: 26, maxHeight: 26 }} width={26} height={26} />
           </div>
           <div>
             <div className="flex items-center gap-2">

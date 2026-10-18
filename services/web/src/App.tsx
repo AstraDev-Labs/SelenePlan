@@ -21,13 +21,13 @@ export const App: React.FC = () => {
     showSlope: true,
     showAspect: false,
     showRoughness: false,
-    showHazard: true,
-    showHillshade: false,
+    showHazard: false,
+    showHillshade: true,
     showIllumination: true,
-    showPSR: false,
+    showPSR: true,
     showEarthVisibility: false,
-    showMLHazard: false,
-    showFusedHazard: true,
+    showMLHazard: true,
+    showFusedHazard: false,
     mlConfidenceThreshold: 0.60,
     colormap: "viridis",
     maxSlopeLimit: 15,
@@ -98,11 +98,11 @@ export const App: React.FC = () => {
 
         {/* Tab Views */}
         {activeTab === "map" && (
-          <div className="flex flex-col xl:flex-row gap-5 items-start w-full">
-            <div className="flex-1 w-full min-w-0">
+          <div className="mission-deck w-full" style={{ width: "100%" }}>
+            <div className="mission-viewport">
               <PolarMap layers={layers} onInspect={setInspection} />
             </div>
-            <div className="flex flex-col gap-5 shrink-0 w-full xl:w-[420px]">
+            <div className="mission-dock">
               <LayerControl layers={layers} onChange={setLayers} />
               <PlannerPanel />
               <InspectorPanel inspection={inspection} />

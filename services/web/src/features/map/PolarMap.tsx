@@ -35,7 +35,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   currentStep = 0,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const offscreenCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [zoom, setZoom] = useState<number>(1.0);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -43,11 +43,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   const [cursorHud, setCursorHud] = useState<{ xM: number; yM: number; elev: number; slope: number; lat: number; lon: number } | null>(null);
   const [dashOffset, setDashOffset] = useState<number>(0);
 
-  // Micro-animation for active traverse path
+  // Animate traverse dashed route
   useEffect(() => {
     const timer = setInterval(() => {
       setDashOffset((prev) => (prev + 1) % 16);
-    }, 80);
+    }, 90);
     return () => clearInterval(timer);
   }, []);
 
@@ -61,7 +61,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const ridgeDist = Math.hypot(xM - (-2200), yM - 0);
     const ridgeBoost = 350.0 * Math.exp(-Math.pow(ridgeDist / 1400.0, 2));
 
-    // Secondary micro-craters elevation dent
+    // Secondary micro-craters
     let craterDent = 0;
     for (const c of SIMULATED_ML_CRATERS) {
       const d = Math.hypot(xM - c.x, yM - c.y);
@@ -78,7 +78,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     }
   }, []);
 
-  // Physically grounded slope based on numerical gradient of elevation
+  // Physically grounded slope based on numerical gradient
   const getSlopeAt = useCallback((xM: number, yM: number) => {
     const delta = 30.0;
     const zE = getElevationAt(xM + delta, yM);
@@ -103,32 +103,29 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     return { detected: false, confidence: 0.0, name: "" };
   }, []);
 
-  // Solar position geometry at current step
   const getSunGeometryAt = useCallback((step: number) => {
     const az = (step * 5.0) % 360.0;
     const el = 1.8 * Math.sin((step / TOTAL_STEPS) * 2 * Math.PI + 0.3) + 1.2;
     return { az, el };
   }, []);
 
-  // Point illumination evaluation
   const isPointLit = useCallback((xM: number, yM: number, step: number) => {
     const dist = Math.sqrt(xM * xM + yM * yM);
     const { el } = getSunGeometryAt(step);
-    if (dist < 1850.0) return false; // Deep PSR floor in permanent shadow
+    if (dist < 1850.0) return false;
     if (dist >= 1950.0 && dist <= 2350.0) {
-      return el > -0.2; // Elevated rim catches grazing solar rays
+      return el > -0.2;
     }
     return el > 0.4;
   }, [getSunGeometryAt]);
 
-  // Point Earth direct-to-Earth line of sight
   const isPointEarthVisible = useCallback((xM: number, yM: number) => {
     const dist = Math.sqrt(xM * xM + yM * yM);
     if (dist < 1850.0) return false;
     return true;
   }, []);
 
-  // Render Canvas with High-Fidelity Lunar Cartography
+  // Main Canvas Render
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -137,17 +134,28 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
     const width = canvas.width;
     const height = canvas.height;
-    ctx.clearRect(0, 0, width, height);
 
-    ctx.save();
-    ctx.translate(width / 2 + pan.x, height / 2 + pan.y);
-    ctx.scale(zoom, zoom);
+    // Initialize or resize offscreen canvas
+    if (!offscreenCanvasRef.current) {
+      offscreenCanvasRef.current = document.createElement("canvas");
+    }
+    const offCanvas = offscreenCanvasRef.current;
+    if (offCanvas.width !== width || offCanvas.height !== height) {
+      offCanvas.width = width;
+      offCanvas.height = height;
+    }
+    const offCtx = offCanvas.getContext("2d");
+    if (!offCtx) return;
+
+    // Clear canvases
+    ctx.clearRect(0, 0, width, height);
+    offCtx.clearRect(0, 0, width, height);
 
     const scale = (EXTENT_M * 2) / width;
-    const imgData = ctx.createImageData(width, height);
+    const imgData = offCtx.createImageData(width, height);
     const data = imgData.data;
 
-    // Sun vector for hillshade calculation
+    // Sun vector for hillshade
     const sunGeom = getSunGeometryAt(currentStep);
     const sunAzRad = (sunGeom.az * Math.PI) / 180.0;
     const sunElRad = (Math.max(1.0, sunGeom.el) * Math.PI) / 180.0;
@@ -155,7 +163,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const sunY = -Math.cos(sunElRad) * Math.cos(sunAzRad);
     const sunZ = Math.sin(sunElRad);
 
-    // Render terrain grid in 2x2 blocks for optimal 60fps performance
+    // Compute Raster Terrain on Offscreen Canvas
     for (let py = 0; py < height; py += 2) {
       const yM = (height / 2 - py) * scale;
       for (let px = 0; px < width; px += 2) {
@@ -174,7 +182,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const earthVis = isPointEarthVisible(xM, yM);
         const isPSR = distM < 1850.0;
 
-        // Realistic Lunar Hillshade (Lommel-Seeliger / Lambertian hybrid)
+        // Hillshade
         const delta = 30.0;
         const dzdx = (getElevationAt(xM + delta, yM) - getElevationAt(xM - delta, yM)) / (2 * delta);
         const dzdy = (getElevationAt(xM, yM + delta) - getElevationAt(xM, yM - delta)) / (2 * delta);
@@ -185,94 +193,85 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
         const dot = nx * sunX + ny * sunY + nz * sunZ;
         const directShade = Math.max(0.0, dot);
-        // Lunar ambient: deep craters have almost zero ambient, exposed plains have subtle regolith scatter
-        const ambient = isPSR ? 0.02 : 0.12;
-        const shade = Math.min(1.0, ambient + directShade * 0.88);
+        const ambient = isPSR ? 0.03 : 0.15;
+        const shade = Math.min(1.0, ambient + directShade * 0.85);
 
-        // Base Lunar Regolith Color (authentic dark-grey anorthosite/basalt)
-        let r = Math.round(35 + shade * 135);
-        let g = Math.round(40 + shade * 140);
-        let b = Math.round(52 + shade * 155);
+        // Base Lunar Regolith
+        let r = Math.round(30 + shade * 130);
+        let g = Math.round(35 + shade * 135);
+        let b = Math.round(48 + shade * 150);
 
-        // Anorthosite peak regolith brightening
         if (elev > -850) {
-          r = Math.min(255, r + 10);
-          g = Math.min(255, g + 10);
-          b = Math.min(255, b + 14);
+          r = Math.min(255, r + 12);
+          g = Math.min(255, g + 12);
+          b = Math.min(255, b + 16);
         }
 
-        // Permanent Shadow void depth inside Shackleton
         if (isPSR) {
-          r = Math.round(10 + shade * 25);
-          g = Math.round(14 + shade * 30);
-          b = Math.round(26 + shade * 45);
+          r = Math.round(12 + shade * 20);
+          g = Math.round(16 + shade * 25);
+          b = Math.round(30 + shade * 40);
         }
 
-        // Layer Blending: Slope Map
+        // Layer: Slope Map
         if (layers.showSlope) {
           const normSlope = Math.min(1.0, slope / 45.0);
           const [cr, cg, cb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
-          // Alpha blend slope over hillshade
-          const alpha = 0.72;
+          const alpha = 0.65;
           r = Math.round(cr * alpha + r * (1 - alpha));
           g = Math.round(cg * alpha + g * (1 - alpha));
           b = Math.round(cb * alpha + b * (1 - alpha));
         }
 
-        // Layer Blending: Solar Illumination
+        // Layer: Illumination
         if (layers.showIllumination) {
           if (lit) {
-            // Warm solar rim highlights
-            r = Math.min(255, Math.round(r * 1.15 + 45));
-            g = Math.min(255, Math.round(g * 1.12 + 35));
+            r = Math.min(255, Math.round(r * 1.15 + 40));
+            g = Math.min(255, Math.round(g * 1.12 + 30));
             b = Math.min(255, Math.round(b * 0.95));
           } else if (!layers.showSlope) {
-            // Deep shadow
-            r = Math.round(r * 0.45);
-            g = Math.round(g * 0.45);
-            b = Math.round(b * 0.55);
+            r = Math.round(r * 0.5);
+            g = Math.round(r * 0.5);
+            b = Math.round(b * 0.6);
           }
         }
 
-        // Layer Blending: Earth Line-of-Sight Visibility
+        // Layer: Earth Line-of-Sight
         if (layers.showEarthVisibility) {
           if (earthVis) {
-            r = Math.round(r * 0.75 + 15);
-            g = Math.round(g * 0.75 + 40);
-            b = Math.round(b * 0.75 + 75);
+            r = Math.round(r * 0.8 + 15);
+            g = Math.round(g * 0.8 + 45);
+            b = Math.round(b * 0.8 + 80);
           } else {
-            // Communication blackout zone
-            r = Math.min(255, Math.round(r * 0.6 + 85));
+            r = Math.min(255, Math.round(r * 0.6 + 90));
             g = Math.round(g * 0.4);
             b = Math.round(b * 0.4);
           }
         }
 
-        // Layer Blending: PSR (Permanently Shadowed Regions)
+        // Layer: PSR
         if (layers.showPSR && isPSR) {
-          r = Math.round(r * 0.35 + 20);
-          g = Math.round(g * 0.35 + 35);
-          b = Math.round(b * 0.35 + 130);
+          r = Math.round(r * 0.35 + 25);
+          g = Math.round(g * 0.35 + 45);
+          b = Math.round(b * 0.35 + 140);
         }
 
-        // Layer Blending: Fused Hazard or Terrain Hazard Overlay
+        // Layer: Fused Hazard Overlay (semi-transparent crimson/amber)
         if (layers.showFusedHazard && isFusedHazard) {
-          // Warning neon crimson/amber hazard tint
-          r = Math.min(255, Math.round(r * 0.3 + 175));
-          g = Math.round(g * 0.3 + 45);
-          b = Math.round(b * 0.3 + 35);
+          r = Math.min(255, Math.round(r * 0.45 + 155));
+          g = Math.round(g * 0.4 + 40);
+          b = Math.round(b * 0.4 + 30);
         } else if (layers.showHazard && isTerrainHazard) {
-          r = Math.min(255, Math.round(r * 0.4 + 160));
-          g = Math.round(g * 0.3 + 30);
-          b = Math.round(b * 0.3 + 30);
+          r = Math.min(255, Math.round(r * 0.45 + 140));
+          g = Math.round(g * 0.35 + 30);
+          b = Math.round(b * 0.35 + 30);
         } else if (layers.showMLHazard && isMLHazard) {
-          // ML Crater Detection Violet Tint
-          r = Math.min(255, Math.round(r * 0.4 + 140));
-          g = Math.round(g * 0.3 + 30);
-          b = Math.min(255, Math.round(b * 0.4 + 155));
+          r = Math.min(255, Math.round(r * 0.45 + 130));
+          g = Math.round(g * 0.35 + 25);
+          b = Math.min(255, Math.round(b * 0.45 + 145));
         }
 
-        // 2x2 Pixel Fill
+        // 2x2 block
         for (let dy = 0; dy < 2; dy++) {
           for (let dx = 0; dx < 2; dx++) {
             const idx = ((py + dy) * width + (px + dx)) * 4;
@@ -285,10 +284,20 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       }
     }
 
-    ctx.putImageData(imgData, 0, 0);
+    offCtx.putImageData(imgData, 0, 0);
 
-    // High-Tech Polar Coordinate Range Rings
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
+    // ==========================================================
+    // Render on Main Canvas with Transform Matrix (Zoom & Pan)
+    // ==========================================================
+    ctx.save();
+    ctx.translate(width / 2 + pan.x, height / 2 + pan.y);
+    ctx.scale(zoom, zoom);
+
+    // Draw Raster Base centered at (0, 0)
+    ctx.drawImage(offCanvas, -width / 2, -height / 2);
+
+    // Polar Range Rings (Centered at 0, 0 - South Pole)
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 6]);
 
@@ -296,33 +305,31 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     rings.forEach((rM) => {
       const rPx = rM / scale;
       ctx.beginPath();
-      ctx.arc(width / 2, height / 2, rPx, 0, Math.PI * 2);
+      ctx.arc(0, 0, rPx, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Range ring distance label
-      ctx.fillStyle = "rgba(148, 163, 184, 0.65)";
+      ctx.fillStyle = "rgba(148, 163, 184, 0.7)";
       ctx.font = "9px 'JetBrains Mono', monospace";
-      ctx.fillText(`${(rM / 1000).toFixed(0)} km`, width / 2 + rPx + 4, height / 2 - 4);
+      ctx.fillText(`${(rM / 1000).toFixed(0)} km`, rPx + 4, -4);
     });
 
-    // Central Polar Crosshairs
+    // Crosshairs through South Pole (0, 0)
     ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
     ctx.beginPath();
-    ctx.moveTo(width / 2, 0);
-    ctx.lineTo(width / 2, height);
-    ctx.moveTo(0, height / 2);
-    ctx.lineTo(width, height / 2);
+    ctx.moveTo(0, -height);
+    ctx.lineTo(0, height);
+    ctx.moveTo(-width, 0);
+    ctx.lineTo(width, 0);
     ctx.stroke();
     ctx.setLineDash([]);
 
     // Vector Annotations for ML Craters
     if (layers.showMLHazard || layers.showFusedHazard) {
       SIMULATED_ML_CRATERS.forEach((c) => {
-        const px = width / 2 + c.x / scale;
-        const py = height / 2 - c.y / scale;
+        const px = c.x / scale;
+        const py = -c.y / scale;
         const rPx = c.r / scale;
 
-        // Glow ring
         ctx.strokeStyle = "rgba(217, 70, 239, 0.9)";
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
@@ -331,8 +338,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // Label box
-        ctx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        ctx.fillStyle = "rgba(15, 23, 42, 0.9)";
         ctx.strokeStyle = "rgba(217, 70, 239, 0.6)";
         ctx.lineWidth = 1;
         const text = `${c.name}`;
@@ -346,21 +352,19 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       });
     }
 
-    // Render Simulated Traverse Route
+    // Traverse Route Vector
     ctx.save();
-    // Path Glow
     ctx.strokeStyle = "rgba(14, 165, 233, 0.4)";
     ctx.lineWidth = 6;
     ctx.beginPath();
     MISSION_WAYPOINTS.forEach((wp, i) => {
-      const px = width / 2 + wp.x / scale;
-      const py = height / 2 - wp.y / scale;
+      const px = wp.x / scale;
+      const py = -wp.y / scale;
       if (i === 0) ctx.moveTo(px, py);
       else ctx.lineTo(px, py);
     });
     ctx.stroke();
 
-    // Sharp Vector Traverse Line
     ctx.strokeStyle = "#38bdf8";
     ctx.lineWidth = 2.5;
     ctx.setLineDash([8, 6]);
@@ -368,26 +372,23 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Waypoint Markers
+    // Waypoints
     MISSION_WAYPOINTS.forEach((wp) => {
-      const px = width / 2 + wp.x / scale;
-      const py = height / 2 - wp.y / scale;
+      const px = wp.x / scale;
+      const py = -wp.y / scale;
 
-      // Marker circle
       ctx.fillStyle = wp.type === "start" ? "#10b981" : wp.type === "target" ? "#f59e0b" : "#38bdf8";
       ctx.beginPath();
       ctx.arc(px, py, wp.type === "start" ? 6 : 4.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Outer ring
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(px, py, wp.type === "start" ? 8 : 6.5, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Badge
-      ctx.fillStyle = "rgba(10, 15, 30, 0.88)";
+      ctx.fillStyle = "rgba(10, 15, 30, 0.9)";
       ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
       ctx.lineWidth = 1;
       ctx.font = "10px 'JetBrains Mono', monospace";
@@ -401,28 +402,27 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     });
     ctx.restore();
 
-    // Geographic Feature Annotations
+    // Feature Labels
     ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     ctx.font = "bold 12px 'Space Grotesk', sans-serif";
     ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
     ctx.shadowBlur = 6;
-    ctx.fillText("Shackleton Crater (Rim Crest)", width / 2 + 15, height / 2 - 95);
-    ctx.fillText("Lunar South Pole (90.00°S)", width / 2 + 8, height / 2 + 20);
+    ctx.fillText("Shackleton Crater (Rim)", 15, -85);
+    ctx.fillText("South Pole (90.00°S)", 8, 18);
 
     ctx.fillStyle = "rgba(148, 163, 184, 0.85)";
     ctx.font = "10px 'Space Grotesk', sans-serif";
-    ctx.fillText("Connecting Ridge (Spine)", width / 2 - 240, height / 2 + 100);
-    ctx.fillText("Permanent Shadow Region (Floor: -4,200m)", width / 2 - 120, height / 2 - 10);
+    ctx.fillText("Connecting Ridge", -230, 90);
+    ctx.fillText("PSR Basin (-4,200m)", -100, -10);
     ctx.shadowBlur = 0;
 
-    // Sun Vector Arrow on Map
+    // Sun Vector Indicator
     const arrowLen = 45;
-    const arrowStartX = width - 70;
-    const arrowStartY = 70;
+    const arrowStartX = width / 2 - 80;
+    const arrowStartY = -height / 2 + 70;
     const arrowEndX = arrowStartX - Math.sin(sunAzRad) * arrowLen;
     const arrowEndY = arrowStartY + Math.cos(sunAzRad) * arrowLen;
 
-    ctx.save();
     ctx.strokeStyle = "#facc15";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -437,7 +437,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
     ctx.font = "9px 'JetBrains Mono', monospace";
     ctx.fillText(`SUN AZ ${sunGeom.az.toFixed(0)}°`, arrowStartX - 28, arrowStartY - 10);
-    ctx.restore();
 
     ctx.restore();
   }, [
@@ -454,7 +453,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     getSunGeometryAt,
   ]);
 
-  // Mouse move point inspector & HUD
+  // Point Inspector & Real-Time Coordinate HUD
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -471,9 +470,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       return;
     }
 
-    const scale = (EXTENT_M * 2) / canvas.width / zoom;
-    const xM = (px - (canvas.width / 2 + pan.x)) * scale;
-    const yM = (canvas.height / 2 + pan.y - py) * scale;
+    const scale = (EXTENT_M * 2) / canvas.width;
+    const dx = (px - (canvas.width / 2 + pan.x)) / zoom;
+    const dy = (py - (canvas.height / 2 + pan.y)) / zoom;
+    const xM = dx * scale;
+    const yM = -dy * scale;
 
     const slope = getSlopeAt(xM, yM);
     const elev = getElevationAt(xM, yM);
@@ -530,12 +531,15 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   };
 
   return (
-    <div ref={containerRef} className="flex flex-col gap-3 w-full">
-      <div className="relative w-full h-[620px] rounded-2xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl group">
+    <div className="flex flex-col gap-3 w-full" style={{ width: "100%" }}>
+      <div
+        className="relative w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950 shadow-2xl"
+        style={{ width: "100%", height: 600, minHeight: 600, position: "relative" }}
+      >
         <canvas
           ref={canvasRef}
           width={880}
-          height={620}
+          height={600}
           onMouseMove={handleMouseMove}
           onMouseDown={(e) => {
             setIsDragging(true);
@@ -548,7 +552,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
             setCursorHud(null);
             onInspect(null);
           }}
-          className="w-full h-full cursor-crosshair block select-none"
+          style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair" }}
           aria-label="2D Lunar South Pole Polar Map"
         />
 
@@ -630,7 +634,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           )}
         </div>
 
-        {/* Bottom-Right: Metric Cartographic Scale Bar */}
+        {/* Bottom-Right: Metric Scale Bar */}
         <div className="absolute bottom-4 right-4 glass-panel px-3 py-1.5 text-[10px] font-mono text-gray-300 flex flex-col items-end pointer-events-none">
           <div className="flex items-center gap-1 mb-1">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
@@ -648,7 +652,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   );
 };
 
-// Helper colormap interpolators (Viridis and Magma)
+// Colormaps
 function getViridisColor(t: number): [number, number, number] {
   const r = Math.round(68 + t * (253 - 68));
   const g = Math.round(1 + t * (231 - 1));
