@@ -7,6 +7,7 @@ interface PolarMapProps {
   layers: LayerState;
   onInspect: (data: PointInspection | null) => void;
   currentStep?: number;
+  onToggle3D?: () => void;
 }
 
 // 20 km x 20 km Shackleton AOI extent (+/- 10 km from South Pole)
@@ -33,6 +34,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   layers,
   onInspect,
   currentStep = 0,
+  onToggle3D,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const terrainCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -48,17 +50,41 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   const dragDistanceRef = useRef<number>(0);
   const mouseRafRef = useRef<number | null>(null);
 
-  // Analytic High-Fidelity Shackleton DEM profile generator
+  // Analytic High-Fidelity Shackleton DEM profile generator with calibrated lunar slopes
   const getElevationAt = useCallback((xM: number, yM: number) => {
     const distSq = xM * xM + yM * yM;
     const dist = Math.sqrt(distSq);
-    const rimRadius = 2100.0;
-    const depth = 4200.0;
 
-    // Connecting Ridge Spine elevation boost along the ridge
-    const rx = xM - (-2200);
-    const ridgeDistSq = rx * rx + yM * yM;
-    const ridgeBoost = ridgeDistSq < 5000000 ? 350.0 * Math.exp(-ridgeDistSq / 1960000) : 0;
+    // Shackleton Crater Morphology
+    // Basin Floor: r <= 850m, gentle bowl (slopes 1° to 6° -> SAFE)
+    // Inner Scarp Wall: 850m < r <= 2100m, steep regolith slope (slopes 25° to 45° -> HAZARD)
+    // Rim Crest: r ~ 2100m, ridge peak (slopes 0° to 5° -> SAFE)
+    // Outer Ejecta & Highlands: r > 2100m, rolling polar plains (slopes 3° to 7° -> SAFE)
+    const zFloor = -4180.0;
+    const zRim = -3300.0;
+    const zPlain = -3750.0;
+    const rFloor = 850.0;
+    const rRim = 2100.0;
+
+    let baseElev: number;
+    if (dist <= rFloor) {
+      const normR = dist / rFloor;
+      baseElev = zFloor + 50.0 * (normR * normR);
+    } else if (dist <= rRim) {
+      const t = (dist - rFloor) / (rRim - rFloor);
+      const s = 3.0 * t * t - 2.0 * t * t * t; // smoothstep S-curve
+      baseElev = (zFloor + 50.0) + (zRim - (zFloor + 50.0)) * s;
+    } else {
+      const dr = dist - rRim;
+      const decay = Math.exp(-Math.pow(dr / 3600.0, 1.25));
+      baseElev = zPlain + (zRim - zPlain) * decay;
+    }
+
+    // Connecting Ridge Spine elevation boost along the traversable ridge (x ~ -2200m)
+    const rx = (xM - (-2200.0)) / 1100.0;
+    const ry = yM / 4500.0;
+    const ridgeDistSq = rx * rx + ry * ry;
+    const ridgeBoost = 180.0 * Math.exp(-ridgeDistSq);
 
     // Secondary micro-craters
     let craterDent = 0;
@@ -67,23 +93,14 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       const dx = xM - c.x;
       const dy = yM - c.y;
       const dSq = dx * dx + dy * dy;
-      const rMax = c.r * 1.5;
-      if (dSq < rMax * rMax) {
+      if (dSq < c.r * c.r) {
         const d = Math.sqrt(dSq);
         const ratio = 1 - d / c.r;
-        if (ratio > 0) {
-          craterDent += 180.0 * ratio * ratio;
-        }
+        craterDent += (c.r * 0.16) * (ratio * ratio);
       }
     }
 
-    if (dist <= rimRadius) {
-      return -4200.0 + (depth * (distSq / (rimRadius * rimRadius))) - craterDent;
-    } else {
-      const rRatio = rimRadius / dist;
-      const base = -800.0 + (1200.0 * rRatio * rRatio * rRatio);
-      return base + ridgeBoost - craterDent;
-    }
+    return baseElev + ridgeBoost - craterDent;
   }, []);
 
   // Physically grounded slope
@@ -274,7 +291,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           b = Math.min(255, lunarIntensity + 3);
 
           // Anorthosite high rim brightening
-          if (elev > -850) {
+          if (elev > -3400) {
             r = Math.min(255, r + 15);
             g = Math.min(255, g + 15);
             b = Math.min(255, b + 18);
@@ -787,6 +804,16 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+          {onToggle3D && (
+            <button
+              onClick={onToggle3D}
+              aria-label="Switch to 3D Moon Globe"
+              title="Switch to 3D Moon Globe"
+              className="p-2 rounded-lg bg-sky-500/20 text-sky-300 hover:bg-sky-500/30 border border-sky-500/40 transition-colors"
+            >
+              <Globe className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Bottom-Left: Live Real-Time Cursor HUD & Pinned Target Indicator */}

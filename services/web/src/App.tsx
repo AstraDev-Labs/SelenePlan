@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Banner } from "@/components/Banner";
 import { Navbar } from "@/components/Navbar";
 import { PolarMap } from "@/features/map/PolarMap";
+import { Moon3DView } from "@/features/map/Moon3DView";
 import { LayerControl, LayerState } from "@/features/map/LayerControl";
 import { InspectorPanel, PointInspection } from "@/features/map/InspectorPanel";
 import { PlannerPanel } from "@/features/map/PlannerPanel";
@@ -11,10 +12,11 @@ import { ApprovalsView } from "@/features/approvals/ApprovalsView";
 import { IntegrityView } from "@/features/integrity/IntegrityView";
 import { AuditView } from "@/features/audit/AuditView";
 import { useAuthStore, UserRole } from "@/auth/store";
-import { ShieldCheck, UserCog } from "lucide-react";
+import { ShieldCheck, UserCog, Globe, Compass } from "lucide-react";
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>("map");
+  const [mapMode, setMapMode] = useState<"2d" | "3d">("2d");
   const [inspection, setInspection] = useState<PointInspection | null>(null);
 
   const [layers, setLayers] = useState<LayerState>({
@@ -78,6 +80,38 @@ export const App: React.FC = () => {
             </div>
           </div>
 
+          {/* 2D / 3D Lunar Viewport Mode Switcher */}
+          <div className="flex items-center gap-1 bg-white/5 p-1 rounded-lg border border-white/10">
+            <button
+              onClick={() => {
+                setActiveTab("map");
+                setMapMode("2d");
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-mono transition-all ${
+                activeTab === "map" && mapMode === "2d"
+                  ? "bg-sky-500 text-slate-950 font-bold shadow-md shadow-sky-500/20"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Compass className="w-3.5 h-3.5" />
+              <span>2D Polar Map</span>
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab("map");
+                setMapMode("3d");
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded text-[11px] font-mono transition-all ${
+                (activeTab === "map" && mapMode === "3d") || activeTab === "moon3d"
+                  ? "bg-sky-500 text-slate-950 font-bold shadow-md shadow-sky-500/20"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>3D Moon Globe</span>
+            </button>
+          </div>
+
           <div className="flex items-center gap-1.5">
             <span className="text-gray-400 text-[11px] mr-1">Switch Role:</span>
             {(["analyst", "steward", "approver", "auditor", "admin"] as UserRole[]).map((r) => (
@@ -100,13 +134,23 @@ export const App: React.FC = () => {
         {activeTab === "map" && (
           <div className="mission-deck w-full" style={{ width: "100%" }}>
             <div className="mission-viewport">
-              <PolarMap layers={layers} onInspect={setInspection} />
+              {mapMode === "2d" ? (
+                <PolarMap layers={layers} onInspect={setInspection} onToggle3D={() => setMapMode("3d")} />
+              ) : (
+                <Moon3DView onToggle2D={() => setMapMode("2d")} />
+              )}
             </div>
             <div className="mission-dock">
               <LayerControl layers={layers} onChange={setLayers} />
               <PlannerPanel />
               <InspectorPanel inspection={inspection} />
             </div>
+          </div>
+        )}
+
+        {activeTab === "moon3d" && (
+          <div className="w-full">
+            <Moon3DView />
           </div>
         )}
 

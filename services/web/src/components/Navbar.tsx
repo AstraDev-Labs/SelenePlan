@@ -7,7 +7,8 @@ import {
   Database,
   Activity,
   LogOut,
-  UserCircle
+  UserCircle,
+  Globe
 } from "lucide-react";
 import { useAuthStore } from "@/auth/store";
 
@@ -21,6 +22,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
 
   const navItems = [
     { id: "map", label: "Polar Map", icon: Compass, roles: ["analyst", "operator", "admin", "approver", "steward", "auditor"] },
+    { id: "moon3d", label: "3D Moon Globe", icon: Globe, roles: ["analyst", "operator", "admin", "approver", "steward", "auditor"] },
     { id: "scenarios", label: "Scenarios", icon: Layers, roles: ["analyst", "operator", "admin"] },
     { id: "datasets", label: "Datasets", icon: Database, roles: ["steward", "admin"] },
     { id: "approvals", label: "Approvals", icon: FileCheck2, roles: ["approver", "admin"] },

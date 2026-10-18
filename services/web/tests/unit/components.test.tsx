@@ -26,6 +26,7 @@ describe("Web UI Components", () => {
     render(<Navbar activeTab="map" onTabChange={vi.fn()} />);
 
     expect(screen.getByText("Polar Map")).toBeInTheDocument();
+    expect(screen.getByText("3D Moon Globe")).toBeInTheDocument();
     expect(screen.getByText("Scenarios")).toBeInTheDocument();
     // Analyst cannot see Approvals or Datasets tabs
     expect(screen.queryByText("Approvals")).toBeNull();
@@ -114,8 +115,34 @@ describe("Web UI Components", () => {
     expect(screen.getByText("-1850.4 m")).toBeInTheDocument();
     expect(screen.getByText("24.3°")).toBeInTheDocument();
     expect(screen.getByText("FUSED HAZARD")).toBeInTheDocument();
+    expect(screen.getByText("SLOPE EXCEEDED")).toBeInTheDocument();
     expect(screen.getByText(/ML Crater Detector/i)).toBeInTheDocument();
     expect(screen.getByText(/85% CONF/i)).toBeInTheDocument();
+  });
+
+  it("displays SAFE TERRAIN and TRAVERSABLE badge when slope is within safe limits", () => {
+    const safeInspection = {
+      x_m: -2200.0,
+      y_m: 500.0,
+      lat_deg: 89.92,
+      lon_deg: 135.0,
+      elevation_m: -3120.0,
+      slope_deg: 4.8,
+      aspect_deg: 45.0,
+      roughness_m: 0.42,
+      is_hazard: false,
+      feature_name: "Connecting Ridge Spine",
+      ml_hazard_detected: false,
+      ml_confidence: 0.0,
+      fused_hazard: false,
+    };
+
+    render(<InspectorPanel inspection={safeInspection} />);
+    expect(screen.getByText("Connecting Ridge Spine")).toBeInTheDocument();
+    expect(screen.getByText("SAFE TERRAIN")).toBeInTheDocument();
+    expect(screen.getByText("TRAVERSABLE")).toBeInTheDocument();
+    expect(screen.getByText("4.8°")).toBeInTheDocument();
+    expect(screen.getByText("CLEAR")).toBeInTheDocument();
   });
 
   it("handles playback, scrubbing, and speed changes in TimelineScrubber", () => {
