@@ -132,8 +132,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   }, []);
 
   // =========================================================================
-  // OPTIMIZATION 1: Compute & Cache Terrain Raster ONLY when layers change
-  // Runs 0 times during pan, zoom, or animations!
+  // Compute & Cache Terrain Raster: Fully implements Hillshade, Roughness, Slope
   // =========================================================================
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -156,7 +155,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const imgData = tCtx.createImageData(width, height);
     const data = imgData.data;
 
-    // Sun vector for hillshade
+    // Grazing solar vector for hillshade calculation
     const sunGeom = getSunGeometryAt(currentStep);
     const sunAzRad = (sunGeom.az * Math.PI) / 180.0;
     const sunElRad = (Math.max(1.0, sunGeom.el) * Math.PI) / 180.0;
@@ -167,7 +166,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const delta = 30.0;
     const inv2Delta = 1 / (2 * delta);
 
-    // Fast 2x2 grid raster generation
     for (let py = 0; py < height; py += 2) {
       const yM = (height / 2 - py) * scale;
       const pyWidth4 = py * width * 4;
@@ -180,12 +178,13 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const distSq = xM * xM + yM * yM;
         const distM = Math.sqrt(distSq);
 
-        // Fast Hillshade via elevation sampling
+        // Neighborhood elevation sampling
         const zE = getElevationAt(xM + delta, yM);
         const zW = getElevationAt(xM - delta, yM);
         const zN = getElevationAt(xM, yM + delta);
         const zS = getElevationAt(xM, yM - delta);
 
+        // Surface Normal & Slope
         const dzdx = (zE - zW) * inv2Delta;
         const dzdy = (zN - zS) * inv2Delta;
         const grad = Math.sqrt(dzdx * dzdx + dzdy * dzdy);
@@ -196,53 +195,110 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const ny = -dzdy / len;
         const nz = 1.0 / len;
 
+        // Hillshade: Lommel-Seeliger / Lambertian lunar grazing irradiance
         const dot = nx * sunX + ny * sunY + nz * sunZ;
         const directShade = dot > 0 ? dot : 0;
         const isPSR = distM < 1850.0;
-        const ambient = isPSR ? 0.03 : 0.15;
-        const shade = Math.min(1.0, ambient + directShade * 0.85);
+        const ambient = isPSR ? 0.02 : 0.12;
+        // High contrast lunar hillshade value [0.0 to 1.0]
+        const shade = Math.min(1.0, ambient + directShade * 0.88);
 
-        // Base Lunar Regolith
-        let r = Math.round(30 + shade * 130);
-        let g = Math.round(35 + shade * 135);
-        let b = Math.round(48 + shade * 150);
+        // Terrain Ruggedness Index (TRI) - Micro-relief deviation
+        const tri = (Math.abs(zE - elev) + Math.abs(zW - elev) + Math.abs(zN - elev) + Math.abs(zS - elev)) * 0.25;
 
-        if (elev > -850) {
-          r = Math.min(255, r + 12);
-          g = Math.min(255, g + 12);
-          b = Math.min(255, b + 16);
-        }
+        // Base color initialization
+        let r = 24, g = 28, b = 40;
 
-        if (isPSR) {
-          r = Math.round(12 + shade * 20);
-          g = Math.round(16 + shade * 25);
-          b = Math.round(30 + shade * 40);
-        }
+        // 1. DEM Hillshade Layer Active
+        if (layers.showHillshade) {
+          // Authentic photographic lunar regolith shaded relief
+          const hsIntensity = Math.round(18 + shade * 225);
+          r = hsIntensity;
+          g = hsIntensity;
+          b = Math.min(255, hsIntensity + (isPSR ? 8 : 4));
 
-        // Layer: Slope Map
-        if (layers.showSlope) {
-          const normSlope = Math.min(1.0, slope / 45.0);
-          const [cr, cg, cb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
-          r = Math.round(cr * 0.65 + r * 0.35);
-          g = Math.round(cg * 0.65 + g * 0.35);
-          b = Math.round(cb * 0.65 + b * 0.35);
-        }
+          // Anorthosite rim highlight
+          if (elev > -850) {
+            r = Math.min(255, r + 16);
+            g = Math.min(255, g + 16);
+            b = Math.min(255, b + 20);
+          }
 
-        // Layer: Solar Illumination
-        if (layers.showIllumination) {
-          const lit = isPointLit(xM, yM, currentStep);
-          if (lit) {
-            r = Math.min(255, Math.round(r * 1.15 + 40));
-            g = Math.min(255, Math.round(g * 1.12 + 30));
-            b = Math.min(255, Math.round(b * 0.95));
-          } else if (!layers.showSlope) {
-            r = Math.round(r * 0.5);
-            g = Math.round(r * 0.5);
-            b = Math.round(b * 0.6);
+          // Deep inky shadow inside PSR floor
+          if (isPSR) {
+            r = Math.round(10 + shade * 15);
+            g = Math.round(14 + shade * 20);
+            b = Math.round(28 + shade * 35);
           }
         }
 
-        // Layer: Earth Line-of-Sight
+        // 2. Thematic Heatmaps: Slope and/or Roughness
+        let thematicR = 0, thematicG = 0, thematicB = 0;
+        let hasThematic = false;
+
+        if (layers.showRoughness && layers.showSlope) {
+          // Both Roughness and Slope active: 50/50 composite
+          hasThematic = true;
+          const normSlope = Math.min(1.0, slope / 45.0);
+          const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
+
+          const normTRI = Math.min(1.0, tri / 2.2);
+          const [rr, rg, rb] = getRoughnessColor(normTRI);
+
+          thematicR = Math.round(sr * 0.5 + rr * 0.5);
+          thematicG = Math.round(sg * 0.5 + rg * 0.5);
+          thematicB = Math.round(sb * 0.5 + rb * 0.5);
+        } else if (layers.showRoughness) {
+          // Roughness (TRI) active
+          hasThematic = true;
+          const normTRI = Math.min(1.0, tri / 2.2);
+          const [rr, rg, rb] = getRoughnessColor(normTRI);
+          thematicR = rr;
+          thematicG = rg;
+          thematicB = rb;
+        } else if (layers.showSlope) {
+          // Slope active
+          hasThematic = true;
+          const normSlope = Math.min(1.0, slope / 45.0);
+          const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
+          thematicR = sr;
+          thematicG = sg;
+          thematicB = sb;
+        }
+
+        // Blend Thematic Heatmaps over Hillshade or Base
+        if (hasThematic) {
+          if (layers.showHillshade) {
+            // Modulate with Hillshade 3D relief: hills pop out in full 3D!
+            const reliefMult = 0.32 + 0.68 * shade;
+            r = Math.round(thematicR * reliefMult);
+            g = Math.round(thematicG * reliefMult);
+            b = Math.round(thematicB * reliefMult);
+          } else {
+            // Flat pure colormap
+            r = thematicR;
+            g = thematicG;
+            b = thematicB;
+          }
+        }
+
+        // 3. Solar Illumination Layer
+        if (layers.showIllumination) {
+          const lit = isPointLit(xM, yM, currentStep);
+          if (lit) {
+            // Warm solar catch-points
+            r = Math.min(255, Math.round(r * 1.15 + 40));
+            g = Math.min(255, Math.round(g * 1.12 + 30));
+            b = Math.min(255, Math.round(b * 0.95));
+          } else if (!hasThematic) {
+            // Darkened shadow zones
+            r = Math.round(r * 0.45);
+            g = Math.round(g * 0.45);
+            b = Math.round(b * 0.55);
+          }
+        }
+
+        // 4. Earth Line-of-Sight Layer
         if (layers.showEarthVisibility) {
           if (!isPSR) {
             r = Math.round(r * 0.8 + 15);
@@ -255,24 +311,24 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           }
         }
 
-        // Layer: PSR
+        // 5. Permanent Shadow Region (PSR) Overlay
         if (layers.showPSR && isPSR) {
           r = Math.round(r * 0.35 + 25);
           g = Math.round(g * 0.35 + 45);
           b = Math.round(b * 0.35 + 140);
         }
 
-        // Layer: Hazards
+        // 6. Hazard Overlays (Fused, Slope, or ML)
         const isTerrainHazard = slope > layers.maxSlopeLimit;
         const mlHazard = getMLHazardAt(xM, yM);
         const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
 
         if (layers.showFusedHazard && (isTerrainHazard || isMLHazard)) {
-          r = Math.min(255, Math.round(r * 0.45 + 155));
+          r = Math.min(255, Math.round(r * 0.45 + 160));
           g = Math.round(g * 0.4 + 40);
           b = Math.round(b * 0.4 + 30);
         } else if (layers.showHazard && isTerrainHazard) {
-          r = Math.min(255, Math.round(r * 0.45 + 140));
+          r = Math.min(255, Math.round(r * 0.45 + 145));
           g = Math.round(g * 0.35 + 30);
           b = Math.round(b * 0.35 + 30);
         } else if (layers.showMLHazard && isMLHazard) {
@@ -295,15 +351,10 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     }
 
     tCtx.putImageData(imgData, 0, 0);
-
-    // Trigger immediate view redraw
     renderScene();
   }, [layers, currentStep, getElevationAt, getMLHazardAt, getSunGeometryAt, isPointLit]);
 
-  // =========================================================================
-  // OPTIMIZATION 2: Ultra-Fast Vector Scene Render (< 0.5ms)
-  // Re-uses cached raster buffer via hardware accelerated drawImage
-  // =========================================================================
+  // Fast GPU Blit Scene Render
   const renderScene = useCallback(() => {
     const canvas = canvasRef.current;
     const tCanvas = terrainCanvasRef.current;
@@ -321,7 +372,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.translate(width / 2 + pan.x, height / 2 + pan.y);
     ctx.scale(zoom, zoom);
 
-    // Blit Cached Raster (Instant GPU Texture Draw)
+    // Blit Cached Raster
     ctx.drawImage(tCanvas, -width / 2, -height / 2);
 
     // Polar Range Rings
@@ -475,12 +526,12 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.restore();
   }, [pan, zoom, layers, currentStep, getSunGeometryAt]);
 
-  // Redraw when pan or zoom changes (instant)
+  // Redraw when pan or zoom changes
   useEffect(() => {
     renderScene();
   }, [pan, zoom, renderScene]);
 
-  // Lightweight 60fps Route Animation Loop (Only renders vector overlay!)
+  // 60fps Route Animation Loop
   useEffect(() => {
     let lastTime = performance.now();
     const animate = (time: number) => {
@@ -497,10 +548,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     };
   }, [renderScene]);
 
-  // =========================================================================
-  // OPTIMIZATION 3: Throttled Point Inspector on MouseMove via RAF
-  // Prevents hundreds of React state updates per second
-  // =========================================================================
+  // Throttled Point Inspector on MouseMove
   const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -517,7 +565,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       return;
     }
 
-    // Throttle cursor calculations to 1 per animation frame
     if (mouseRafRef.current) return;
     mouseRafRef.current = requestAnimationFrame(() => {
       mouseRafRef.current = null;
@@ -541,6 +588,13 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
       const isFusedHazard = isTerrainHazard || isMLHazard;
 
+      const delta = 30.0;
+      const zE = getElevationAt(xM + delta, yM);
+      const zW = getElevationAt(xM - delta, yM);
+      const zN = getElevationAt(xM, yM + delta);
+      const zS = getElevationAt(xM, yM - delta);
+      const tri = (Math.abs(zE - elev) + Math.abs(zW - elev) + Math.abs(zN - elev) + Math.abs(zS - elev)) * 0.25;
+
       setCursorHud({
         xM: Math.round(xM),
         yM: Math.round(yM),
@@ -563,7 +617,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         elevation_m: elev,
         slope_deg: slope,
         aspect_deg: (Math.atan2(xM, yM) * 180.0) / Math.PI,
-        roughness_m: slope * 0.08,
+        roughness_m: tri,
         is_hazard: isTerrainHazard,
         feature_name: distM < 2100 ? (isPSR ? "Shackleton PSR Floor" : "Shackleton Rim") : "Connecting Ridge",
         is_lit: lit,
@@ -718,4 +772,18 @@ function getMagmaColor(t: number): [number, number, number] {
   const g = (t * 136) | 0;
   const b = (4 + t * 149) | 0;
   return [r, g, b];
+}
+
+// Terrain Ruggedness Index (TRI) Colormap: Slate/Navy -> Teal -> Amber -> Gold
+function getRoughnessColor(t: number): [number, number, number] {
+  if (t < 0.25) {
+    const u = t / 0.25;
+    return [15, (23 + u * 120) | 0, (42 + u * 94) | 0];
+  } else if (t < 0.65) {
+    const u = (t - 0.25) / 0.4;
+    return [(15 + u * 230) | 0, (143 + u * 15) | 0, (136 - u * 125) | 0];
+  } else {
+    const u = (t - 0.65) / 0.35;
+    return [(245 + u * 9) | 0, (158 + u * 82) | 0, (11 + u * 127) | 0];
+  }
 }
