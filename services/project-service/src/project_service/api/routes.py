@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
@@ -188,7 +188,7 @@ async def start_run(
 
     # Idempotency check
     if idempotency_key and idempotency_key in IDEMPOTENCY_STORE:
-        return IDEMPOTENCY_STORE[idempotency_key]
+        return cast(dict[str, Any], IDEMPOTENCY_STORE[idempotency_key])
 
     run_id = f"run-{uuid.uuid4().hex[:8]}"
     initial_state = RunState(
@@ -355,7 +355,7 @@ async def make_decision(
         raise HTTPException(status_code=404, detail="Plan or version not found")
 
     if idempotency_key and idempotency_key in IDEMPOTENCY_STORE:
-        return IDEMPOTENCY_STORE[idempotency_key]
+        return cast(dict[str, Any], IDEMPOTENCY_STORE[idempotency_key])
 
     plan_version = PLAN_VERSION_STORE[version_id]
 

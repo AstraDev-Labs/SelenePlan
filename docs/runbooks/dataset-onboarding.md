@@ -43,6 +43,7 @@ The ingestion worker automatically performs:
 4. **Lunar Geodesy Validation:** Validates coordinate bounds using `selene-geo`:
    ```python
    from selene_geo.crs import validate_lunar_crs
+
    validate_lunar_crs(raster_crs, reference_radius_m=1737400.0)
    ```
 5. **MinIO Upload:** Uploads COG to `s3://selene-data/terrain/lola_south_pole_120m.tif`.

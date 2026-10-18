@@ -7,7 +7,6 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-
 from ingestion_service.sources.allowlist import AllowedSource
 from ingestion_service.sources.downloader import SecureDownloader
 from ingestion_service.sources.ssrf import SSRFSecurityError, validate_url_ssrf

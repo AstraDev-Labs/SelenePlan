@@ -38,6 +38,12 @@ module = [
     "boto3.*",
     "botocore.*",
     "yaml.*",
+    "scipy.*",
+    "onnxruntime.*",
+    "cv2.*",
+    "zarr.*",
+    "spiceypy.*",
+    "selene_horizon.*",
 ]
 ignore_missing_imports = true
 

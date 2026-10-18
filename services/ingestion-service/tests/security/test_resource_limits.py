@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-
 from ingestion_service.sources.allowlist import AllowedSource
 from ingestion_service.sources.downloader import SecureDownloader
 from ingestion_service.validation.raster_validator import (

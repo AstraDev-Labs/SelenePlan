@@ -2,7 +2,6 @@
 
 import numpy as np
 import pytest
-
 from selene_geo.tiling import (
     TileWindow,
     assemble_tiles,

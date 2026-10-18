@@ -6,7 +6,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-
 from selene_events.consumer import (
     DLQPublisher,
     IdempotentEventConsumer,

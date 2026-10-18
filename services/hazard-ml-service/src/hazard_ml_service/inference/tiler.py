@@ -1,6 +1,7 @@
 """Image tiling and spatial grid extraction for inference worker."""
 
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 
@@ -99,4 +100,4 @@ def stitch_hazard_heatmap(
 
     weight_accum[weight_accum == 0.0] = 1.0
     result = global_accum / weight_accum
-    return np.clip(result, 0.0, 1.0)
+    return cast(np.ndarray, np.clip(result, 0.0, 1.0))

@@ -7,13 +7,12 @@ import uuid
 from typing import Any
 
 import pytest
-from selene_events import EventEnvelope, InMemoryDedupeStore
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-
 from audit_service.consumer.audit_consumer import AuditEventConsumer
 from audit_service.db.repository import AuditRepository
 from audit_service.db.session import DATABASE_URL, init_db
+from selene_events import EventEnvelope, InMemoryDedupeStore
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 
 @pytest.fixture(autouse=True)

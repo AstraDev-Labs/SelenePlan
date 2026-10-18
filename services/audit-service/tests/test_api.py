@@ -9,12 +9,11 @@ from collections.abc import AsyncIterator
 os.environ["DB_NULL_POOL"] = "1"
 
 import pytest
+from audit_service.db.session import dispose_engine, get_engine, init_db
+from audit_service.main import app
 from httpx import ASGITransport, AsyncClient
 from selene_auth import Principal, set_global_jwt_validator
 from sqlalchemy import text
-
-from audit_service.db.session import dispose_engine, get_engine, init_db
-from audit_service.main import app
 
 SUPERUSER_URL = "postgresql+asyncpg://selene:dev-only-change-me@localhost:5432/selene"
 

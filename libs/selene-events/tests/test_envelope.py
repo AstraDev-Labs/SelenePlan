@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError as PydanticValidationError
-
 from selene_events.models import EventEnvelope
 from selene_events.validation import load_envelope_schema, validate_envelope_dict
 

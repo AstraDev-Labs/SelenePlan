@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from hello_service.main import app
 from selene_auth import Principal, set_global_jwt_validator
 from selene_auth.jwt import AuthError
-
-from hello_service.main import app
 
 
 class DummyValidator:

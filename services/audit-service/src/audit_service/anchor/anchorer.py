@@ -7,8 +7,8 @@ import json
 import os
 from typing import Any
 
-import boto3  # type: ignore[import-untyped]
-from botocore.config import Config  # type: ignore[import-untyped]
+import boto3
+from botocore.config import Config
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 

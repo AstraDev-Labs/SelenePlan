@@ -5,7 +5,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from selene_geo.constants import MOON_RADIUS_M
 from selene_geo.spice import (
     compute_local_az_el,

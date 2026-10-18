@@ -3,7 +3,6 @@
 import math
 
 import pytest
-
 from selene_geo.constants import (
     MOON_GRAVITY_M_S2,
     MOON_RADIUS_M,

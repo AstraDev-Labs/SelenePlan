@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import Any, cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -53,7 +53,7 @@ def create_app() -> FastAPI:
             status=response.status_code,
         ).inc()
         REQUEST_LATENCY.labels(endpoint=endpoint).observe(latency)
-        return response
+        return cast(Response, response)
 
     @app.get("/healthz", tags=["System"])
     async def healthz() -> dict[str, str]:

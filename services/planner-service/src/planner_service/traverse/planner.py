@@ -143,7 +143,10 @@ def plan_traverse(
     visited: set[tuple[int, int, int, int]] = set()
 
     states_evaluated = 0
-    worst_violation = {"dominant_violation": "NO_FEASIBLE_PATH", "reason": "Search space exhausted"}
+    worst_violation: dict[str, Any] = {
+        "dominant_violation": "NO_FEASIBLE_PATH",
+        "reason": "Search space exhausted",
+    }
 
     while open_set and states_evaluated < max_search_states:
         curr = heapq.heappop(open_set)

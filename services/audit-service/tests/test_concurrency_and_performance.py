@@ -17,10 +17,6 @@ import time
 import uuid
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
-
 from audit_service.anchor.anchorer import (
     S3_BUCKET,
     create_daily_anchor,
@@ -30,6 +26,9 @@ from audit_service.anchor.anchorer import (
 from audit_service.db.repository import AuditRepository
 from audit_service.db.session import DATABASE_URL, init_db
 from audit_service.verify.verifier import verify_chain
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 
 @pytest.fixture(autouse=True)

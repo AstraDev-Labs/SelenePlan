@@ -65,16 +65,13 @@ jobs:
           pip install -e "services/${{ matrix.service }}[dev]"
       - name: Lint
         if: steps.exists.outputs.present == 'true'
-        working-directory: services/${{ matrix.service }}
-        run: ruff check . && ruff format --check .
+        run: ruff check "services/${{ matrix.service }}" --config pyproject.toml && ruff format --check "services/${{ matrix.service }}" --config pyproject.toml
       - name: Type check
         if: steps.exists.outputs.present == 'true'
-        working-directory: services/${{ matrix.service }}
-        run: mypy src
+        run: mypy --config-file pyproject.toml "services/${{ matrix.service }}/src"
       - name: Tests
         if: steps.exists.outputs.present == 'true'
-        working-directory: services/${{ matrix.service }}
-        run: pytest -q --maxfail=1
+        run: pytest "services/${{ matrix.service }}/tests" -q --maxfail=1
 
   web:
     runs-on: ubuntu-latest
@@ -130,14 +127,10 @@ jobs:
         run: |
           pip install semgrep
           semgrep scan --config p/default --error --severity ERROR .
-      - name: Trivy filesystem scan (deps, misconfig, secrets)
-        uses: aquasecurity/trivy-action@v0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          severity: HIGH,CRITICAL
-          exit-code: "0"
-          ignore-unfixed: true
+      - name: Trivy filesystem scan
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          trivy fs --severity HIGH,CRITICAL --ignore-unfixed --exit-code 0 .
       - name: SBOM (Syft)
         run: |
           curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin

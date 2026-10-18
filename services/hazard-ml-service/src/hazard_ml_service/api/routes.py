@@ -12,9 +12,9 @@ from hazard_ml_service.events.publisher import create_hazard_completed_event
 from hazard_ml_service.fusion.fuser import fuse_hazards
 from hazard_ml_service.inference.engine import InferenceEngine
 from hazard_ml_service.inference.validator import ModelValidationError, validate_onnx_model
+from hazard_ml_service.registry.gate import ApprovalGateError
 from hazard_ml_service.registry.models import (
     GLOBAL_MODEL_REGISTRY,
-    ApprovalGateError,
     ModelCard,
     SecurityIntegrityError,
 )

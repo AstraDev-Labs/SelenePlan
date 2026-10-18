@@ -5,11 +5,10 @@ from __future__ import annotations
 import io
 
 import numpy as np
-from PIL import Image
-from selene_geo.cog import validate_cog_bytes
-
 from ingestion_service.cog.converter import COGConverter
 from ingestion_service.validation.raster_validator import RasterMetadata
+from PIL import Image
+from selene_geo.cog import validate_cog_bytes
 
 
 def _create_synthetic_geotiff(width: int = 512, height: int = 512) -> bytes:

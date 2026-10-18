@@ -1,6 +1,6 @@
 """Vectorized statistical metrics for illumination time stacks."""
 
-from __future__ import annotations
+from typing import cast
 
 import numpy as np
 
@@ -62,7 +62,7 @@ def compute_psr_mask(lit_fraction: np.ndarray) -> np.ndarray:
     Returns:
         2D boolean array where True indicates a PSR.
     """
-    return lit_fraction == 0.0
+    return cast(np.ndarray, lit_fraction == 0.0)
 
 
 def compute_transitions_count(cube: np.ndarray) -> np.ndarray:

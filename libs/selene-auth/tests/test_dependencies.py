@@ -5,7 +5,6 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
-
 from selene_auth.dependencies import (
     get_current_principal,
     require_mfa,

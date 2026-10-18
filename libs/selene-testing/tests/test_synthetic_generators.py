@@ -4,7 +4,6 @@ import math
 
 import numpy as np
 import pytest
-
 from selene_testing import (
     add_seeded_noise,
     make_bowl_crater,

@@ -7,7 +7,6 @@ import httpx
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-
 from selene_auth.jwt import AuthError, JWKSCache, JWTValidator
 from selene_auth.principal import Principal
 

@@ -6,7 +6,6 @@ import datetime
 import uuid
 
 import pytest
-
 from audit_service.chain.canonical import canonical_json_bytes
 from audit_service.chain.hasher import (
     GENESIS_PREV_HASH,

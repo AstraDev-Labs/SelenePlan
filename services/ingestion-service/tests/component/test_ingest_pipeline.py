@@ -12,15 +12,14 @@ os.environ["DB_NULL_POOL"] = "1"
 import numpy as np
 import pytest
 from httpx import ASGITransport, AsyncClient
-from PIL import Image
-from selene_auth import Principal, set_global_jwt_validator
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from ingestion_service.db.repository import IngestionRepository
 from ingestion_service.db.session import dispose_engine, get_engine, init_db
 from ingestion_service.main import app
 from ingestion_service.storage.s3_client import DataCorruptionError, get_storage_manager
 from ingestion_service.worker.ingest_worker import IngestPipeline
+from PIL import Image
+from selene_auth import Principal, set_global_jwt_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 SUPERUSER_URL = os.getenv(
     "DATABASE_URL", "postgresql+asyncpg://selene:dev-only-change-me@localhost:5432/selene"

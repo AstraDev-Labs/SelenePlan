@@ -87,15 +87,16 @@ class ZarrCommsStore:
         if not path.exists():
             raise FileNotFoundError(f"Comms product {product_id} not found at {path}")
 
-        root = zarr.open_group(str(path), mode="r")
-        raw_meta = json.loads(root.attrs["metadata"])
+        root: Any = zarr.open_group(str(path), mode="r")
+        meta_attr = root.attrs.get("metadata")
+        raw_meta = json.loads(str(meta_attr)) if isinstance(meta_attr, (str, bytes)) else meta_attr
         return CommsProductMetadata(**raw_meta)
 
     def read_slice(self, product_id: str, time_index: int) -> np.ndarray:
         """Read a single 2D spatial visibility slice."""
         path = self._product_path(product_id)
-        root = zarr.open_group(str(path), mode="r")
-        cube = root["cube"]
+        root: Any = zarr.open_group(str(path), mode="r")
+        cube: Any = root["cube"]
         if time_index < 0 or time_index >= cube.shape[0]:
             raise IndexError(f"Time index {time_index} out of range [0, {cube.shape[0] - 1}]")
         return np.asarray(cube[time_index])
@@ -103,8 +104,8 @@ class ZarrCommsStore:
     def read_timeseries(self, product_id: str, row: int, col: int) -> np.ndarray:
         """Read a 1D time-series vector for a specific (row, col) cell."""
         path = self._product_path(product_id)
-        root = zarr.open_group(str(path), mode="r")
-        cube = root["cube"]
+        root: Any = zarr.open_group(str(path), mode="r")
+        cube: Any = root["cube"]
         if row < 0 or row >= cube.shape[1] or col < 0 or col >= cube.shape[2]:
             raise IndexError(f"Cell ({row}, {col}) out of bounds")
         return np.asarray(cube[:, row, col])

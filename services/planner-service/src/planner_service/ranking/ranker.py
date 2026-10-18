@@ -15,9 +15,9 @@ class CandidateSite:
     lon_deg: float
     rank: int = 0
     score: float = 0.0
-    score_breakdown: dict[str, float] = None
+    score_breakdown: dict[str, float] | None = None
     rejected: bool = False
-    reject_reasons: list[str] = None
+    reject_reasons: list[str] | None = None
 
 
 @dataclass

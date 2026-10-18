@@ -6,12 +6,11 @@ import datetime
 import uuid
 
 import pytest
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
-
 from audit_service.chain.hasher import GENESIS_PREV_HASH, compute_row_hash
 from audit_service.db.session import init_db
 from audit_service.verify.verifier import verify_chain
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
 
 # Superuser connection
 SUPERUSER_URL = "postgresql+asyncpg://selene:dev-only-change-me@localhost:5432/selene"

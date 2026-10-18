@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
-
 from selene_events.models import EventEnvelope
 from selene_events.producer import EventProducer, type_to_topic
 

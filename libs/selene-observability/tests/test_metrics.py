@@ -4,7 +4,6 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from prometheus_client import REGISTRY
-
 from selene_observability.metrics import PrometheusMetricsMiddleware
 
 
