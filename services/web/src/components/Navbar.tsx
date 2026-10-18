@@ -36,15 +36,21 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, onTabChange }) => {
     <header className="glass-panel border-x-0 border-t-0 rounded-none px-6 py-3 flex items-center justify-between sticky top-0 z-40">
       {/* Brand & Project Selector */}
       <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-            <Compass className="w-5 h-5 text-gray-950" aria-hidden="true" />
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-500/20 to-blue-600/30 border border-sky-400/40 flex items-center justify-center shadow-lg shadow-sky-500/20 backdrop-blur-sm relative overflow-hidden group">
+            <div className="absolute inset-0 bg-sky-400/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <img src="/moon.svg" alt="SelenePlan Lunar Emblem" className="w-6 h-6 object-contain drop-shadow" />
           </div>
           <div>
-            <h1 className="text-base font-bold tracking-tight text-white leading-none">
-              Selene<span className="text-cyan-400">Plan</span>
-            </h1>
-            <p className="text-[10px] text-gray-400 font-mono">LUNAR SOUTH POLE</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold tracking-tight text-white leading-none">
+                Selene<span className="text-sky-400">Plan</span>
+              </h1>
+              <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-semibold bg-sky-500/10 border border-sky-500/30 text-sky-300">
+                LUNAR MISSION OS
+              </span>
+            </div>
+            <p className="text-[10px] text-gray-400 font-mono tracking-wider mt-0.5">SHACKLETON POLAR AOI</p>
           </div>
         </div>
 

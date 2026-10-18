@@ -33,7 +33,7 @@ export const LayerControl: React.FC<LayerControlProps> = ({ layers, onChange }) 
   };
 
   return (
-    <aside aria-label="Map Layer Controls" className="glass-panel p-4 w-72 flex flex-col gap-4 text-xs font-sans">
+    <aside aria-label="Map Layer Controls" className="glass-panel p-4 w-full flex flex-col gap-4 text-xs font-sans">
       <div className="flex items-center justify-between border-b border-white/10 pb-2">
         <div className="flex items-center gap-2 text-cyan-300 font-semibold">
           <Layers className="w-4 h-4" aria-hidden="true" />

@@ -64,12 +64,18 @@ export const App: React.FC = () => {
       <Banner />
       <Navbar activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-6">
-        {/* Role Switcher Toolbar for Verification */}
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-white/5 border border-white/10 px-4 py-2.5 rounded-xl text-xs font-mono">
-          <div className="flex items-center gap-2 text-cyan-300">
-            <UserCog className="w-4 h-4 text-cyan-400" />
-            <span>Active Persona: <strong className="text-white capitalize">{user?.roles.join(", ")}</strong></span>
+      <main className="flex-1 max-w-[1780px] w-full mx-auto px-4 lg:px-8 py-5 flex flex-col gap-5">
+        {/* Aerospace Mission Operations Toolbar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 glass-panel px-4 py-2 text-xs font-mono">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>LIVE TELEMETRY</span>
+            </div>
+            <div className="flex items-center gap-2 text-gray-300">
+              <UserCog className="w-4 h-4 text-sky-400" />
+              <span>Security Clearance: <strong className="text-white capitalize">{user?.roles.join(", ")}</strong></span>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -78,10 +84,10 @@ export const App: React.FC = () => {
               <button
                 key={r}
                 onClick={() => handleRoleSwitch(r)}
-                className={`px-2.5 py-1 rounded text-[11px] capitalize transition-colors ${
+                className={`px-2.5 py-1 rounded text-[11px] capitalize transition-all ${
                   user?.roles.includes(r)
-                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                    : "bg-black/40 text-gray-400 hover:text-gray-200 border border-transparent"
+                    ? "bg-sky-500/20 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-500/20 font-semibold"
+                    : "bg-white/5 text-gray-400 hover:text-gray-200 border border-transparent hover:bg-white/10"
                 }`}
               >
                 {r}
@@ -92,11 +98,11 @@ export const App: React.FC = () => {
 
         {/* Tab Views */}
         {activeTab === "map" && (
-          <div className="flex flex-col lg:flex-row gap-6 items-start">
-            <div className="flex-1 w-full">
+          <div className="flex flex-col xl:flex-row gap-5 items-start w-full">
+            <div className="flex-1 w-full min-w-0">
               <PolarMap layers={layers} onInspect={setInspection} />
             </div>
-            <div className="flex flex-col gap-6 shrink-0 w-full lg:w-80">
+            <div className="flex flex-col gap-5 shrink-0 w-full xl:w-[420px]">
               <LayerControl layers={layers} onChange={setLayers} />
               <PlannerPanel />
               <InspectorPanel inspection={inspection} />
@@ -112,7 +118,7 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/5 py-4 px-6 text-center text-xs text-gray-500 font-mono flex items-center justify-between max-w-7xl mx-auto w-full">
+      <footer className="border-t border-white/5 py-4 px-6 text-center text-xs text-gray-500 font-mono flex items-center justify-between max-w-[1780px] mx-auto w-full">
         <span>SelenePlan Microservice Framework &copy; 2026 AstraDev Labs</span>
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1 text-emerald-400">

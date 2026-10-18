@@ -41,7 +41,7 @@ function getCompassHeading(deg: number): string {
 export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) => {
   if (!inspection) {
     return (
-      <div className="glass-panel p-3.5 w-72 text-xs flex items-center gap-2 text-gray-400">
+      <div className="glass-panel p-3.5 w-full text-xs flex items-center gap-2 text-gray-400">
         <Crosshair className="w-4 h-4 text-cyan-400 animate-pulse" aria-hidden="true" />
         <span>Hover or click map to inspect pixel terrain...</span>
       </div>
@@ -51,7 +51,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({ inspection }) =>
   const isFusedHazard = inspection.fused_hazard ?? (inspection.is_hazard || (inspection.ml_hazard_detected && (inspection.ml_confidence ?? 0) >= 0.60));
 
   return (
-    <div className="glass-panel p-4 w-72 flex flex-col gap-3 text-xs font-mono">
+    <div className="glass-panel p-4 w-full flex flex-col gap-3 text-xs font-mono">
       <div className="flex items-center justify-between border-b border-white/10 pb-2">
         <div className="flex items-center gap-1.5 text-cyan-300 font-semibold font-sans">
           <Crosshair className="w-4 h-4 text-cyan-400" aria-hidden="true" />
