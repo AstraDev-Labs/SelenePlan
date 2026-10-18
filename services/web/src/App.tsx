@@ -18,15 +18,15 @@ export const App: React.FC = () => {
   const [inspection, setInspection] = useState<PointInspection | null>(null);
 
   const [layers, setLayers] = useState<LayerState>({
-    showSlope: true,
+    showSlope: false,
     showAspect: false,
     showRoughness: false,
     showHazard: false,
     showHillshade: true,
-    showIllumination: true,
-    showPSR: true,
+    showIllumination: false,
+    showPSR: false,
     showEarthVisibility: false,
-    showMLHazard: true,
+    showMLHazard: false,
     showFusedHazard: false,
     mlConfidenceThreshold: 0.60,
     colormap: "viridis",

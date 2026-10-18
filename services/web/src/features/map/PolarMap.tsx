@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from "react";
 import { LayerState } from "./LayerControl";
 import { PointInspection } from "./InspectorPanel";
-import { ZoomIn, ZoomOut, RotateCcw, Navigation2, Compass, MapPin, Target, X } from "lucide-react";
+import { ZoomIn, ZoomOut, RotateCcw, Navigation2, MapPin, Target, X, Globe, Moon } from "lucide-react";
 
 interface PolarMapProps {
   layers: LayerState;
@@ -46,9 +46,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   const [pinnedPoint, setPinnedPoint] = useState<{ xM: number; yM: number; elev: number; slope: number } | null>(null);
   const pinnedInspectionRef = useRef<PointInspection | null>(null);
   const dragDistanceRef = useRef<number>(0);
-
-  const dashOffsetRef = useRef<number>(0);
-  const rafIdRef = useRef<number | null>(null);
   const mouseRafRef = useRef<number | null>(null);
 
   // Analytic High-Fidelity Shackleton DEM profile generator
@@ -91,7 +88,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
   // Physically grounded slope
   const getSlopeAt = useCallback((xM: number, yM: number) => {
-    const delta = 30.0;
+    const delta = 25.0;
     const zE = getElevationAt(xM + delta, yM);
     const zW = getElevationAt(xM - delta, yM);
     const zN = getElevationAt(xM, yM + delta);
@@ -151,7 +148,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
     const isFusedHazard = isTerrainHazard || isMLHazard;
 
-    const delta = 30.0;
+    const delta = 25.0;
     const zE = getElevationAt(xM + delta, yM);
     const zW = getElevationAt(xM - delta, yM);
     const zN = getElevationAt(xM, yM + delta);
@@ -191,7 +188,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
   }, [currentStep, getElevationAt, getMLHazardAt, getSlopeAt, isPointEarthVisible, isPointLit, layers.maxSlopeLimit, layers.mlConfidenceThreshold]);
 
   // =========================================================================
-  // Compute & Cache Terrain Raster: Fully implements Hillshade, Roughness, Slope
+  // Compute & Cache Terrain Raster: Crisp 1x1 Native Resolution Photographic Moon Surface
   // =========================================================================
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -222,28 +219,27 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     const sunY = -Math.cos(sunElRad) * Math.cos(sunAzRad);
     const sunZ = Math.sin(sunElRad);
 
-    const delta = 30.0;
+    const delta = 25.0;
     const inv2Delta = 1 / (2 * delta);
 
-    for (let py = 0; py < height; py += 2) {
+    // Render crisp 1x1 pixel resolution (no chunky 2x2 blocks!)
+    for (let py = 0; py < height; py++) {
       const yM = (height / 2 - py) * scale;
-      const pyWidth4 = py * width * 4;
-      const nextPyWidth4 = (py + 1) * width * 4;
+      const rowOffset = py * width * 4;
 
-      for (let px = 0; px < width; px += 2) {
+      for (let px = 0; px < width; px++) {
         const xM = (px - width / 2) * scale;
 
         const elev = getElevationAt(xM, yM);
         const distSq = xM * xM + yM * yM;
         const distM = Math.sqrt(distSq);
 
-        // Neighborhood elevation sampling
+        // Elevation gradients for Surface Normal
         const zE = getElevationAt(xM + delta, yM);
         const zW = getElevationAt(xM - delta, yM);
         const zN = getElevationAt(xM, yM + delta);
         const zS = getElevationAt(xM, yM - delta);
 
-        // Surface Normal & Slope
         const dzdx = (zE - zW) * inv2Delta;
         const dzdy = (zN - zS) * inv2Delta;
         const grad = Math.sqrt(dzdx * dzdx + dzdy * dzdy);
@@ -254,103 +250,86 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         const ny = -dzdy / len;
         const nz = 1.0 / len;
 
-        // Hillshade: Lommel-Seeliger / Lambertian lunar grazing irradiance
+        // Realistic Lunar Hillshade (Hapke / Lommel-Seeliger scattering model)
         const dot = nx * sunX + ny * sunY + nz * sunZ;
         const directShade = dot > 0 ? dot : 0;
         const isPSR = distM < 1850.0;
         const ambient = isPSR ? 0.02 : 0.12;
         const shade = Math.min(1.0, ambient + directShade * 0.88);
 
-        // Terrain Ruggedness Index (TRI) - Micro-relief deviation
+        // Authentic Lunar Regolith Grayscale Palette (NASA LROC / Clementine standard)
+        // Regolith base: charcoal/slate basalt to bright anorthosite highlands
+        let r: number, g: number, b: number;
+
+        if (isPSR) {
+          // Permanently Shadowed Region: dark void with faint earthshine reflection
+          r = Math.round(14 + shade * 18);
+          g = Math.round(16 + shade * 20);
+          b = Math.round(24 + shade * 28);
+        } else {
+          // Sunlit lunar surface: rich silver-grey tones
+          const lunarIntensity = Math.round(28 + shade * 205);
+          r = lunarIntensity;
+          g = lunarIntensity;
+          b = Math.min(255, lunarIntensity + 3);
+
+          // Anorthosite high rim brightening
+          if (elev > -850) {
+            r = Math.min(255, r + 15);
+            g = Math.min(255, g + 15);
+            b = Math.min(255, b + 18);
+          }
+        }
+
+        // ===================================================================
+        // OPTIONAL THEMATIC GIS OVERLAYS (Only when toggled by user!)
+        // ===================================================================
+
+        // 1. Terrain Ruggedness Index (TRI)
         const tri = (Math.abs(zE - elev) + Math.abs(zW - elev) + Math.abs(zN - elev) + Math.abs(zS - elev)) * 0.25;
 
-        // Base color initialization
-        let r = 24, g = 28, b = 40;
-
-        // 1. DEM Hillshade Layer Active
-        if (layers.showHillshade) {
-          const hsIntensity = Math.round(18 + shade * 225);
-          r = hsIntensity;
-          g = hsIntensity;
-          b = Math.min(255, hsIntensity + (isPSR ? 8 : 4));
-
-          if (elev > -850) {
-            r = Math.min(255, r + 16);
-            g = Math.min(255, g + 16);
-            b = Math.min(255, b + 20);
-          }
-
-          if (isPSR) {
-            r = Math.round(10 + shade * 15);
-            g = Math.round(14 + shade * 20);
-            b = Math.round(28 + shade * 35);
-          }
-        }
-
-        // 2. Thematic Heatmaps: Slope and/or Roughness
-        let thematicR = 0, thematicG = 0, thematicB = 0;
-        let hasThematic = false;
-
-        if (layers.showRoughness && layers.showSlope) {
-          hasThematic = true;
-          const normSlope = Math.min(1.0, slope / 45.0);
-          const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
-
+        if (layers.showRoughness) {
           const normTRI = Math.min(1.0, tri / 2.2);
           const [rr, rg, rb] = getRoughnessColor(normTRI);
-
-          thematicR = Math.round(sr * 0.5 + rr * 0.5);
-          thematicG = Math.round(sg * 0.5 + rg * 0.5);
-          thematicB = Math.round(sb * 0.5 + rb * 0.5);
-        } else if (layers.showRoughness) {
-          hasThematic = true;
-          const normTRI = Math.min(1.0, tri / 2.2);
-          const [rr, rg, rb] = getRoughnessColor(normTRI);
-          thematicR = rr;
-          thematicG = rg;
-          thematicB = rb;
-        } else if (layers.showSlope) {
-          hasThematic = true;
-          const normSlope = Math.min(1.0, slope / 45.0);
-          const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
-          thematicR = sr;
-          thematicG = sg;
-          thematicB = sb;
+          // Modulate with topography
+          const trAlpha = 0.65;
+          r = Math.round(rr * trAlpha + r * (1 - trAlpha));
+          g = Math.round(rg * trAlpha + g * (1 - trAlpha));
+          b = Math.round(rb * trAlpha + b * (1 - trAlpha));
         }
 
-        if (hasThematic) {
-          if (layers.showHillshade) {
-            const reliefMult = 0.32 + 0.68 * shade;
-            r = Math.round(thematicR * reliefMult);
-            g = Math.round(thematicG * reliefMult);
-            b = Math.round(thematicB * reliefMult);
-          } else {
-            r = thematicR;
-            g = thematicG;
-            b = thematicB;
-          }
+        // 2. Slope Map (Viridis / Magma)
+        if (layers.showSlope) {
+          const normSlope = Math.min(1.0, slope / 45.0);
+          const [sr, sg, sb] = layers.colormap === "magma" ? getMagmaColor(normSlope) : getViridisColor(normSlope);
+          const slAlpha = 0.60;
+          r = Math.round(sr * slAlpha + r * (1 - slAlpha));
+          g = Math.round(sg * slAlpha + g * (1 - slAlpha));
+          b = Math.round(sb * slAlpha + b * (1 - slAlpha));
         }
 
         // 3. Solar Illumination Layer
         if (layers.showIllumination) {
           const lit = isPointLit(xM, yM, currentStep);
           if (lit) {
-            r = Math.min(255, Math.round(r * 1.15 + 40));
-            g = Math.min(255, Math.round(g * 1.12 + 30));
+            // Subtle warm solar highlight on sunlit ground
+            r = Math.min(255, Math.round(r * 1.1 + 35));
+            g = Math.min(255, Math.round(g * 1.08 + 25));
             b = Math.min(255, Math.round(b * 0.95));
-          } else if (!hasThematic) {
-            r = Math.round(r * 0.45);
-            g = Math.round(r * 0.45);
-            b = Math.round(b * 0.55);
+          } else {
+            // Shadow zone dampening
+            r = Math.round(r * 0.5);
+            g = Math.round(r * 0.5);
+            b = Math.round(b * 0.6);
           }
         }
 
-        // 4. Earth Line-of-Sight Layer
+        // 4. Earth Visibility (Line-of-Sight)
         if (layers.showEarthVisibility) {
           if (!isPSR) {
-            r = Math.round(r * 0.8 + 15);
-            g = Math.round(g * 0.8 + 45);
-            b = Math.round(b * 0.8 + 80);
+            r = Math.round(r * 0.8 + 12);
+            g = Math.round(g * 0.8 + 40);
+            b = Math.round(b * 0.8 + 75);
           } else {
             r = Math.min(255, Math.round(r * 0.6 + 90));
             g = Math.round(g * 0.4);
@@ -358,14 +337,14 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           }
         }
 
-        // 5. Permanent Shadow Region (PSR) Overlay
+        // 5. Permanent Shadow Region (PSR) Subtle Contour
         if (layers.showPSR && isPSR) {
-          r = Math.round(r * 0.35 + 25);
-          g = Math.round(g * 0.35 + 45);
-          b = Math.round(b * 0.35 + 140);
+          r = Math.round(r * 0.4 + 20);
+          g = Math.round(g * 0.4 + 35);
+          b = Math.round(b * 0.4 + 110);
         }
 
-        // 6. Hazard Overlays
+        // 6. Hazard Overlays (Fused, Slope, or ML)
         const isTerrainHazard = slope > layers.maxSlopeLimit;
         const mlHazard = getMLHazardAt(xM, yM);
         const isMLHazard = mlHazard.detected && mlHazard.confidence >= layers.mlConfidenceThreshold;
@@ -384,16 +363,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           b = Math.min(255, Math.round(b * 0.45 + 145));
         }
 
-        // Fill 2x2 Block
-        const idx0 = pyWidth4 + px * 4;
-        const idx1 = idx0 + 4;
-        const idx2 = nextPyWidth4 + px * 4;
-        const idx3 = idx2 + 4;
-
-        data[idx0] = r; data[idx0 + 1] = g; data[idx0 + 2] = b; data[idx0 + 3] = 255;
-        data[idx1] = r; data[idx1 + 1] = g; data[idx1 + 2] = b; data[idx1 + 3] = 255;
-        data[idx2] = r; data[idx2 + 1] = g; data[idx2 + 2] = b; data[idx2 + 3] = 255;
-        data[idx3] = r; data[idx3 + 1] = g; data[idx3 + 2] = b; data[idx3 + 3] = 255;
+        const idx = rowOffset + px * 4;
+        data[idx] = r;
+        data[idx + 1] = g;
+        data[idx + 2] = b;
+        data[idx + 3] = 255;
       }
     }
 
@@ -419,11 +393,11 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.translate(width / 2 + pan.x, height / 2 + pan.y);
     ctx.scale(zoom, zoom);
 
-    // Blit Cached Raster
+    // Blit Cached Raster (100% crisp photographic lunar DEM surface)
     ctx.drawImage(tCanvas, -width / 2, -height / 2);
 
-    // Polar Range Rings
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.25)";
+    // Polar Range Rings (Subtle cyan grid)
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.22)";
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 6]);
 
@@ -440,8 +414,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       ctx.fillText(`${(rM / 1000).toFixed(0)} km`, rPx + 4, -4);
     }
 
-    // Crosshairs
-    ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+    // Central Crosshair passing through South Pole (0, 0)
+    ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
     ctx.beginPath();
     ctx.moveTo(0, -height);
     ctx.lineTo(0, height);
@@ -450,7 +424,7 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // Vector Annotations for ML Craters
+    // Vector Annotations for ML Craters (Only if toggled)
     if (layers.showMLHazard || layers.showFusedHazard) {
       for (let i = 0; i < SIMULATED_ML_CRATERS.length; i++) {
         const c = SIMULATED_ML_CRATERS[i];
@@ -480,10 +454,10 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       }
     }
 
-    // Traverse Route Vector
+    // Clean Aerospace Rover Traverse Route (Crisp static line, no animated jitter!)
     ctx.save();
-    ctx.strokeStyle = "rgba(14, 165, 233, 0.4)";
-    ctx.lineWidth = 6;
+    ctx.strokeStyle = "rgba(14, 165, 233, 0.35)";
+    ctx.lineWidth = 5;
     ctx.beginPath();
     for (let i = 0; i < MISSION_WAYPOINTS.length; i++) {
       const wp = MISSION_WAYPOINTS[i];
@@ -495,11 +469,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.stroke();
 
     ctx.strokeStyle = "#38bdf8";
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([8, 6]);
-    ctx.lineDashOffset = -dashOffsetRef.current;
+    ctx.lineWidth = 2;
     ctx.stroke();
-    ctx.setLineDash([]);
 
     // Waypoints
     for (let i = 0; i < MISSION_WAYPOINTS.length; i++) {
@@ -509,16 +480,16 @@ export const PolarMap: React.FC<PolarMapProps> = ({
 
       ctx.fillStyle = wp.type === "start" ? "#10b981" : wp.type === "target" ? "#f59e0b" : "#38bdf8";
       ctx.beginPath();
-      ctx.arc(px, py, wp.type === "start" ? 6 : 4.5, 0, Math.PI * 2);
+      ctx.arc(px, py, wp.type === "start" ? 5.5 : 4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(px, py, wp.type === "start" ? 8 : 6.5, 0, Math.PI * 2);
+      ctx.arc(px, py, wp.type === "start" ? 7.5 : 6, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = "rgba(10, 15, 30, 0.9)";
+      ctx.fillStyle = "rgba(10, 15, 30, 0.92)";
       ctx.strokeStyle = "rgba(56, 189, 248, 0.5)";
       ctx.lineWidth = 1;
       ctx.font = "10px 'JetBrains Mono', monospace";
@@ -533,21 +504,19 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     ctx.restore();
 
     // =======================================================================
-    // DRAW PINNED INSPECTION RETICLE (Target Lock Marker)
+    // PINNED INSPECTION RETICLE (Target Lock)
     // =======================================================================
     if (pinnedPoint) {
       const pinPx = pinnedPoint.xM / scale;
       const pinPy = -pinnedPoint.yM / scale;
 
       ctx.save();
-      // Outer Target Halo (Animated Pulse)
+      // Outer Target Halo
       ctx.strokeStyle = "#22d3ee";
       ctx.lineWidth = 2;
-      ctx.setLineDash([5, 4]);
       ctx.beginPath();
       ctx.arc(pinPx, pinPy, 14, 0, Math.PI * 2);
       ctx.stroke();
-      ctx.setLineDash([]);
 
       // Center Bullseye Ring
       ctx.fillStyle = "rgba(34, 211, 238, 0.25)";
@@ -592,21 +561,21 @@ export const PolarMap: React.FC<PolarMapProps> = ({
       ctx.restore();
     }
 
-    // Feature Labels
+    // Geographic Feature Labels
     ctx.fillStyle = "rgba(255, 255, 255, 0.95)";
     ctx.font = "bold 12px 'Space Grotesk', sans-serif";
-    ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
     ctx.shadowBlur = 6;
     ctx.fillText("Shackleton Crater (Rim)", 15, -85);
     ctx.fillText("South Pole (90.00°S)", 8, 18);
 
-    ctx.fillStyle = "rgba(148, 163, 184, 0.85)";
+    ctx.fillStyle = "rgba(203, 213, 225, 0.9)";
     ctx.font = "10px 'Space Grotesk', sans-serif";
     ctx.fillText("Connecting Ridge", -230, 90);
-    ctx.fillText("PSR Basin (-4,200m)", -100, -10);
+    ctx.fillText("Shackleton Crater Floor (-4,200m)", -105, -12);
     ctx.shadowBlur = 0;
 
-    // Sun Vector
+    // Sun Vector Arrow
     const sunGeom = getSunGeometryAt(currentStep);
     const sunAzRad = (sunGeom.az * Math.PI) / 180.0;
     const arrowLen = 45;
@@ -638,33 +607,13 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     renderScene();
   }, [pan, zoom, pinnedPoint, renderScene]);
 
-  // 60fps Route Animation Loop
-  useEffect(() => {
-    let lastTime = performance.now();
-    const animate = (time: number) => {
-      if (time - lastTime >= 80) {
-        dashOffsetRef.current = (dashOffsetRef.current + 1) % 16;
-        renderScene();
-        lastTime = time;
-      }
-      rafIdRef.current = requestAnimationFrame(animate);
-    };
-    rafIdRef.current = requestAnimationFrame(animate);
-    return () => {
-      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
-    };
-  }, [renderScene]);
-
-  // =========================================================================
   // Helper: Converts client mouse coordinates to canvas bitmap & terrain coords
-  // =========================================================================
   const getCoordsFromEvent = useCallback((clientX: number, clientY: number) => {
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
 
-    // Normalize CSS display pixels to internal canvas bitmap pixels!
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
@@ -680,9 +629,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({
     return { bx, by, xM, yM };
   }, [pan.x, pan.y, zoom]);
 
-  // Canvas Click Handler: PINS inspected terrain pixel at EXACT click location
+  // Canvas Click Handler: PINS inspected terrain pixel at exact click location
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    // If user dragged more than 5px, it was a pan, not a click
     if (dragDistanceRef.current > 5) return;
 
     const coords = getCoordsFromEvent(e.clientX, e.clientY);
@@ -753,7 +701,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
         lon: Math.round((lon >= 0 ? lon : lon + 360) * 10) / 10,
       });
 
-      // If no point is pinned, hover inspects terrain live
       if (!pinnedInspectionRef.current) {
         const liveInspection = computePointInspection(xM, yM);
         onInspect(liveInspection);
@@ -782,7 +729,6 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           onMouseLeave={() => {
             setIsDragging(false);
             setCursorHud(null);
-            // If user has a pinned point, PRESERVE IT when mouse leaves canvas!
             if (pinnedInspectionRef.current) {
               onInspect(pinnedInspectionRef.current);
             } else {
@@ -793,11 +739,15 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           aria-label="2D Lunar South Pole Polar Map"
         />
 
-        {/* Top-Left: Target Telemetry Badge */}
-        <div className="absolute top-4 left-4 glass-panel px-3.5 py-2.5 flex flex-col gap-1 text-[11px] font-mono pointer-events-none">
-          <div className="flex items-center gap-2 text-sky-300 font-semibold">
-            <Compass className="w-3.5 h-3.5 text-sky-400" />
-            <span>AOI: SHACKLETON POLAR RIM</span>
+        {/* Top-Left: Target Telemetry & Clear Lunar Orientation HUD */}
+        <div className="absolute top-4 left-4 glass-panel px-3.5 py-2.5 flex flex-col gap-1.5 text-[11px] font-mono pointer-events-none">
+          <div className="flex items-center gap-2 text-sky-300 font-bold">
+            <Moon className="w-4 h-4 text-sky-400" />
+            <span>MOON: SOUTH POLE SURFACE MAP</span>
+          </div>
+          <div className="flex items-center gap-2 text-emerald-300 text-[10px]">
+            <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            <span>↑ 0° LON: TOWARDS EARTH (LOS)</span>
           </div>
           <div className="text-gray-400 flex items-center gap-2 text-[10px]">
             <span>CRS: IAU_2015:30100</span>
@@ -844,8 +794,8 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           {pinnedPoint ? (
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-cyan-300 font-bold">
-                <Target className="w-4 h-4 text-cyan-400 animate-pulse" />
-                <span>PINNED TARGET LOCKED:</span>
+                <Target className="w-4 h-4 text-cyan-400" />
+                <span>PINNED TARGET:</span>
               </div>
               <div className="text-gray-300">
                 X: <strong className="text-white">{Math.round(pinnedPoint.xM)}m</strong> | Y:{" "}
@@ -894,23 +844,24 @@ export const PolarMap: React.FC<PolarMapProps> = ({
           ) : (
             <div className="flex items-center gap-2 text-gray-400 text-[11px]">
               <MapPin className="w-3.5 h-3.5 text-sky-400/60" />
-              <span>Click anywhere on map to inspect & lock pixel terrain • Pan with drag</span>
+              <span>Click anywhere on lunar surface to inspect & lock pixel terrain • Pan with drag</span>
             </div>
           )}
         </div>
 
-        {/* Bottom-Right: Metric Scale Bar */}
+        {/* Bottom-Right: Metric Scale Bar & Farside Orientation Indicator */}
         <div className="absolute bottom-4 right-4 glass-panel px-3 py-1.5 text-[10px] font-mono text-gray-300 flex flex-col items-end pointer-events-none">
           <div className="flex items-center gap-1 mb-1">
             <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
             <span>SCALE BAR</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 mb-1">
             <div className="h-1.5 bg-sky-400/80 border border-white/40 rounded-sm w-20 relative">
               <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white/60" />
             </div>
             <span className="text-white font-semibold">2.0 km</span>
           </div>
+          <span className="text-[9px] text-gray-400">↓ 180° Lon (Lunar Farside)</span>
         </div>
       </div>
     </div>
@@ -932,7 +883,7 @@ function getMagmaColor(t: number): [number, number, number] {
   return [r, g, b];
 }
 
-// Terrain Ruggedness Index (TRI) Colormap: Slate/Navy -> Teal -> Amber -> Gold
+// Terrain Ruggedness Index (TRI) Colormap
 function getRoughnessColor(t: number): [number, number, number] {
   if (t < 0.25) {
     const u = t / 0.25;
