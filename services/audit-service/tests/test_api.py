@@ -49,6 +49,7 @@ async def clean_table_for_module() -> None:
     from sqlalchemy.ext.asyncio import create_async_engine
 
     eng = create_async_engine(SUPERUSER_URL)
+    await init_db(eng)
     async with eng.begin() as conn:
         await conn.execute(text("TRUNCATE TABLE audit.audit_log, audit.anchors RESTART IDENTITY"))
     await eng.dispose()
