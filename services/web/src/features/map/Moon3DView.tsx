@@ -97,6 +97,72 @@ const LUNAR_LANDMARKS: Landmark[] = [
   },
 ];
 
+// Simulated ML Detected Craters (advisory obstacles in Shackleton perimeter)
+const SIMULATED_ML_CRATERS = [
+  { x: 1400, y: 1600, r: 280, conf: 0.88, name: "Crater Alpha (ML 88%)" },
+  { x: -1800, y: 800, r: 220, conf: 0.82, name: "Crater Beta (ML 82%)" },
+  { x: 500, y: -2200, r: 310, conf: 0.79, name: "Crater Gamma (ML 79%)" },
+  { x: -1200, y: -1900, r: 190, conf: 0.84, name: "Crater Delta (ML 84%)" },
+];
+
+// Planned Rover Traverse Waypoints
+const MISSION_WAYPOINTS = [
+  { id: "WP-0", label: "LANDER-ALPHA", x: -2600, y: -800, elev: -790, type: "start" },
+  { id: "WP-1", label: "RIDGE-SPINE", x: -2100, y: 300, elev: -840, type: "waypoint" },
+  { id: "WP-2", label: "SHACKLETON-CREST", x: -1500, y: 1400, elev: -910, type: "science" },
+  { id: "WP-3", label: "PSR-EDGE", x: -600, y: 1750, elev: -1600, type: "target" },
+];
+
+function polarStereoToLatLon(xM: number, yM: number): { lat: number; lon: number } {
+  const dist = Math.hypot(xM, yM);
+  const colatRad = dist / 1737400.0;
+  const lat = -90.0 + (colatRad * 180.0) / Math.PI;
+  let lon = (Math.atan2(xM, -yM) * 180.0) / Math.PI;
+  if (lon > 180) lon -= 360;
+  if (lon < -180) lon += 360;
+  return { lat, lon };
+}
+
+function getViridisColor(t: number): [number, number, number] {
+  const r = (68 + t * 185) | 0;
+  const g = (1 + t * 230) | 0;
+  const b = (84 - t * 47) | 0;
+  return [r, g, b];
+}
+
+function getMagmaColor(t: number): [number, number, number] {
+  const r = (t * 251) | 0;
+  const g = (t * 136) | 0;
+  const b = (4 + t * 149) | 0;
+  return [r, g, b];
+}
+
+function getTerrainRampColor(t: number): [number, number, number] {
+  if (t < 0.25) {
+    const u = t / 0.25;
+    return [34, (197 - u * 50) | 0, (94 + u * 100) | 0];
+  } else if (t < 0.6) {
+    const u = (t - 0.25) / 0.35;
+    return [(234 - u * 20) | 0, (179 + u * 20) | 0, 8];
+  } else {
+    const u = (t - 0.6) / 0.4;
+    return [(239 + u * 16) | 0, (68 + u * 187) | 0, (68 + u * 187) | 0];
+  }
+}
+
+function getRoughnessColor(t: number): [number, number, number] {
+  if (t < 0.25) {
+    const u = t / 0.25;
+    return [15, (23 + u * 120) | 0, (42 + u * 94) | 0];
+  } else if (t < 0.65) {
+    const u = (t - 0.25) / 0.4;
+    return [(15 + u * 230) | 0, (143 + u * 15) | 0, (136 - u * 125) | 0];
+  } else {
+    const u = (t - 0.65) / 0.35;
+    return [(245 + u * 9) | 0, (158 + u * 82) | 0, (11 + u * 127) | 0];
+  }
+}
+
 // Helper: Convert Lunar Lat/Lon (deg) to 3D Cartesian coordinates on sphere of radius R
 function latLonToVector3(latDeg: number, lonDeg: number, radius: number): THREE.Vector3 {
   const phi = (90 - latDeg) * (Math.PI / 180);
@@ -511,8 +577,16 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const moonMeshRef = useRef<THREE.Mesh | null>(null);
+  const moonMatRef = useRef<THREE.MeshStandardMaterial | null>(null);
+  const layerMeshRef = useRef<THREE.Mesh | null>(null);
+  const layerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const layerTextureRef = useRef<THREE.CanvasTexture | null>(null);
+  const sampleCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const sunLightRef = useRef<THREE.DirectionalLight | null>(null);
   const markersGroupRef = useRef<THREE.Group | null>(null);
+  const mlHazardGroupRef = useRef<THREE.Group | null>(null);
+  const psrMarkersGroupRef = useRef<THREE.Group | null>(null);
+  const route3DGroupRef = useRef<THREE.Group | null>(null);
   const pinnedMarkerGroupRef = useRef<THREE.Group | null>(null);
 
   // Orbit state
@@ -568,7 +642,121 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
     });
     const moonMesh = new THREE.Mesh(moonGeo, moonMat);
     moonMeshRef.current = moonMesh;
+    moonMatRef.current = moonMat;
     scene.add(moonMesh);
+
+    // 4b. GIS Layer Overlay Sphere (radius 1.002 to prevent z-fighting with the base Moon sphere)
+    const layerCanvas = document.createElement("canvas");
+    layerCanvas.width = 1024;
+    layerCanvas.height = 512;
+    layerCanvasRef.current = layerCanvas;
+    const layerTexture = new THREE.CanvasTexture(layerCanvas);
+    layerTextureRef.current = layerTexture;
+
+    const layerGeo = new THREE.SphereGeometry(1.002, 96, 96);
+    const layerMat = new THREE.MeshBasicMaterial({
+      map: layerTexture,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    const layerMesh = new THREE.Mesh(layerGeo, layerMat);
+    layerMesh.visible = false;
+    layerMeshRef.current = layerMesh;
+    scene.add(layerMesh);
+
+    // 4c. 3D ML Hazard Beacons Group (Crater Alpha, Beta, Gamma, Delta)
+    const mlHazardGroup = new THREE.Group();
+    mlHazardGroupRef.current = mlHazardGroup;
+    mlHazardGroup.visible = false;
+    scene.add(mlHazardGroup);
+
+    SIMULATED_ML_CRATERS.forEach((c) => {
+      const { lat, lon } = polarStereoToLatLon(c.x, c.y);
+      const pos = latLonToVector3(lat, lon, 1.006);
+      const norm = pos.clone().normalize();
+
+      const ringGeo = new THREE.RingGeometry(0.012, 0.02, 24);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0xd946ef,
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.copy(pos.clone().multiplyScalar(1.001));
+      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), norm);
+
+      const stemGeo = new THREE.CylinderGeometry(0.002, 0.002, 0.06, 12);
+      const stemMat = new THREE.MeshBasicMaterial({ color: 0xd946ef });
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.copy(pos.clone().add(norm.clone().multiplyScalar(0.03)));
+      stem.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), norm);
+
+      const tipGeo = new THREE.OctahedronGeometry(0.012);
+      const tipMat = new THREE.MeshBasicMaterial({ color: 0xf0abfc });
+      const tip = new THREE.Mesh(tipGeo, tipMat);
+      tip.position.copy(pos.clone().add(norm.clone().multiplyScalar(0.06)));
+
+      mlHazardGroup.add(ring);
+      mlHazardGroup.add(stem);
+      mlHazardGroup.add(tip);
+    });
+
+    // 4d. 3D Cryogenic PSR Cold Trap Beacons Group
+    const psrMarkersGroup = new THREE.Group();
+    psrMarkersGroupRef.current = psrMarkersGroup;
+    psrMarkersGroup.visible = false;
+    scene.add(psrMarkersGroup);
+
+    const psrPos = latLonToVector3(-89.9, 0.0, 1.004);
+    const psrNorm = psrPos.clone().normalize();
+    const psrRingGeo = new THREE.RingGeometry(0.022, 0.032, 32);
+    const psrRingMat = new THREE.MeshBasicMaterial({
+      color: 0x818cf8,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+    });
+    const psrRing = new THREE.Mesh(psrRingGeo, psrRingMat);
+    psrRing.position.copy(psrPos);
+    psrRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), psrNorm);
+    psrMarkersGroup.add(psrRing);
+
+    // 4e. 3D Rover Traverse Line & Waypoints
+    const route3DGroup = new THREE.Group();
+    route3DGroupRef.current = route3DGroup;
+    scene.add(route3DGroup);
+
+    const routePoints: THREE.Vector3[] = [];
+    MISSION_WAYPOINTS.forEach((wp) => {
+      const { lat, lon } = polarStereoToLatLon(wp.x, wp.y);
+      const wpPos = latLonToVector3(lat, lon, 1.004);
+      routePoints.push(wpPos);
+
+      const wpRingGeo = new THREE.RingGeometry(0.008, 0.014, 16);
+      const wpRingMat = new THREE.MeshBasicMaterial({
+        color: wp.type === "start" ? 0x10b981 : wp.type === "target" ? 0xf59e0b : 0x38bdf8,
+        side: THREE.DoubleSide,
+      });
+      const wpRing = new THREE.Mesh(wpRingGeo, wpRingMat);
+      wpRing.position.copy(wpPos);
+      wpRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), wpPos.clone().normalize());
+      route3DGroup.add(wpRing);
+    });
+
+    if (routePoints.length >= 2) {
+      const curve = new THREE.CatmullRomCurve3(routePoints);
+      const curvePts = curve.getPoints(40);
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(curvePts);
+      const lineMat = new THREE.LineBasicMaterial({
+        color: 0x38bdf8,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const routeLine = new THREE.Line(lineGeo, lineMat);
+      route3DGroup.add(routeLine);
+    }
 
     // 5. Deep Space Starfield
     const starGeo = new THREE.BufferGeometry();
@@ -713,13 +901,15 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
       renderer.dispose();
       moonGeo.dispose();
       moonMat.dispose();
+      layerGeo.dispose();
+      layerMat.dispose();
       starGeo.dispose();
       starMat.dispose();
       container.innerHTML = "";
     };
   }, []);
 
-  // Synchronize Solar Light Vector with Timeline Step
+  // Synchronize Solar Light Vector with Timeline Step and Illumination Layer
   useEffect(() => {
     if (!sunLightRef.current) return;
     const az = (currentStep * 5.0) % 360.0;
@@ -735,7 +925,284 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
     const sy = sunDist * Math.sin(elRad);
 
     sunLightRef.current.position.set(sx, sy, sz);
-  }, [currentStep]);
+    if (layers?.showIllumination) {
+      sunLightRef.current.intensity = 3.6;
+    } else {
+      sunLightRef.current.intensity = 2.8;
+    }
+  }, [currentStep, layers?.showIllumination]);
+
+  // Dynamic 3D GIS Layers Render Engine
+  useEffect(() => {
+    if (!layerCanvasRef.current || !layerTextureRef.current || !layerMeshRef.current) return;
+
+    const layerCanvas = layerCanvasRef.current;
+    const layerTexture = layerTextureRef.current;
+    const layerMesh = layerMeshRef.current;
+    const layerCtx = layerCanvas.getContext("2d");
+    if (!layerCtx) return;
+
+    const width = layerCanvas.width;
+    const height = layerCanvas.height;
+
+    // Check if any GIS layer is active
+    const hasActiveLayers =
+      layers &&
+      (layers.showSlope ||
+        layers.showRoughness ||
+        layers.showHazard ||
+        layers.showPSR ||
+        layers.showEarthVisibility ||
+        layers.showMLHazard ||
+        layers.showFusedHazard ||
+        layers.showIllumination ||
+        layers.showAspect);
+
+    // Toggle 3D marker groups
+    if (mlHazardGroupRef.current) {
+      mlHazardGroupRef.current.visible = !!(layers?.showMLHazard || layers?.showFusedHazard);
+    }
+    if (psrMarkersGroupRef.current) {
+      psrMarkersGroupRef.current.visible = !!layers?.showPSR;
+    }
+
+    // Toggle topographic relief enhancement for DEM Hillshade
+    if (moonMatRef.current) {
+      moonMatRef.current.bumpScale = layers?.showHillshade ? 0.08 : 0.025;
+    }
+
+    // If no layers are active, hide the layer overlay and clear
+    if (!hasActiveLayers) {
+      layerMesh.visible = false;
+      layerCtx.clearRect(0, 0, width, height);
+      layerTexture.needsUpdate = true;
+      return;
+    }
+
+    // Show the layer overlay
+    layerMesh.visible = true;
+
+    // Fast Grid Sampling (256x128) for full-sphere thematic GIS rasters
+    const sw = 256;
+    const sh = 128;
+    if (!sampleCanvasRef.current) {
+      sampleCanvasRef.current = document.createElement("canvas");
+      sampleCanvasRef.current.width = sw;
+      sampleCanvasRef.current.height = sh;
+    }
+    const sCanvas = sampleCanvasRef.current;
+    const sCtx = sCanvas.getContext("2d");
+    if (!sCtx) return;
+
+    const sImgData = sCtx.createImageData(sw, sh);
+    const sData = sImgData.data;
+
+    const maxSlopeLimit = layers?.maxSlopeLimit ?? 15;
+    const colormap = layers?.colormap ?? "viridis";
+    const sunLon = (currentStep * 7.5) % 360 - 180;
+
+    for (let py = 0; py < sh; py++) {
+      const v = py / sh;
+      const lat = (0.5 - v) * 180.0;
+      const isSP = lat <= -78.0;
+
+      for (let px = 0; px < sw; px++) {
+        const u = px / sw;
+        const lon = (u - 0.5) * 360.0;
+
+        let slope = 0;
+        let roughness = 0;
+        let isPSR = false;
+        let earthVis = false;
+        let isLit = false;
+        let isMLHazard = false;
+
+        if (isSP) {
+          const colatRad = (90.0 + lat) * (Math.PI / 180.0);
+          const lonRad = (lon * Math.PI) / 180.0;
+          const rSP_M = 1737400.0 * colatRad;
+          const xM = rSP_M * Math.sin(lonRad);
+          const yM = -rSP_M * Math.cos(lonRad);
+          slope = getShackletonSlope(xM, yM);
+          const distM = Math.hypot(xM, yM);
+          roughness = Math.min(2.5, (slope / 18.0) * 1.2 + 0.15);
+          isPSR = distM < 1850.0;
+          earthVis = distM >= 1850.0;
+          const el = 1.8 * Math.sin((currentStep / 48) * 2 * Math.PI + 0.3) + 1.2;
+          isLit = distM >= 1850.0 && el > 0.4;
+          isMLHazard = distM > 1200 && distM < 2100;
+        } else {
+          const inProcellarum = lat > -15 && lat < 55 && lon > -80 && lon < -15;
+          const inImbrium = lat > 15 && lat < 50 && lon > -40 && lon < 0;
+          const inTranquillitatis = lat > -5 && lat < 20 && lon > 15 && lon < 45;
+          const inSerenitatis = lat > 15 && lat < 40 && lon > 10 && lon < 35;
+          const inSPABasin = lat < -30 && (lon > 140 || lon < -140);
+          const nearTycho = Math.hypot(lat - (-43.3), lon - (-11.2)) < 9.0;
+          const nearCopernicus = Math.hypot(lat - 9.6, lon - (-20.1)) < 7.0;
+
+          if (inProcellarum || inImbrium || inTranquillitatis || inSerenitatis) {
+            slope = 2.0;
+            roughness = 0.2;
+          } else if (inSPABasin) {
+            slope = 5.0;
+            roughness = 0.7;
+          } else if (nearTycho) {
+            slope = 30.0;
+            roughness = 2.1;
+            isMLHazard = true;
+          } else if (nearCopernicus) {
+            slope = 27.0;
+            roughness = 1.9;
+            isMLHazard = true;
+          } else {
+            slope = 6.0 + Math.abs(Math.sin(lon * 0.2)) * 3.5;
+            roughness = 0.55;
+          }
+
+          earthVis = lon >= -88.0 && lon <= 88.0;
+          const dLon = Math.abs(lon - sunLon);
+          isLit = Math.min(dLon, 360 - dLon) < 88.0;
+        }
+
+        let r = 0, g = 0, b = 0, a = 0;
+
+        // 1. Slope Map Layer
+        if (layers?.showSlope) {
+          const normSlope = Math.min(1.0, slope / 45.0);
+          const [sr, sg, sb] =
+            colormap === "magma"
+              ? getMagmaColor(normSlope)
+              : colormap === "terrain"
+              ? getTerrainRampColor(normSlope)
+              : getViridisColor(normSlope);
+          r = sr; g = sg; b = sb; a = 180;
+        }
+
+        // 2. Roughness Layer (TRI)
+        if (layers?.showRoughness) {
+          const normTRI = Math.min(1.0, roughness / 2.2);
+          const [rr, rg, rb] = getRoughnessColor(normTRI);
+          if (a === 0) {
+            r = rr; g = rg; b = rb; a = 180;
+          } else {
+            r = (r + rr) >> 1;
+            g = (g + rg) >> 1;
+            b = (b + rb) >> 1;
+          }
+        }
+
+        // 3. Aspect Layer
+        if (layers?.showAspect) {
+          const asp = (lon + 360) % 360;
+          const ar = (128 + 120 * Math.sin((asp * Math.PI) / 180)) | 0;
+          const ag = (128 + 120 * Math.cos((asp * Math.PI) / 180)) | 0;
+          const ab = 200;
+          if (a === 0) {
+            r = ar; g = ag; b = ab; a = 160;
+          } else {
+            r = (r + ar) >> 1;
+            g = (g + ag) >> 1;
+            b = (b + ab) >> 1;
+          }
+        }
+
+        // 4. Earth Visibility (Line-of-Sight)
+        if (layers?.showEarthVisibility) {
+          if (earthVis) {
+            if (a === 0) {
+              r = 6; g = 182; b = 212; a = 135;
+            } else {
+              r = (r * 0.5 + 6 * 0.5) | 0;
+              g = (g * 0.5 + 182 * 0.5) | 0;
+              b = (b * 0.5 + 212 * 0.5) | 0;
+              a = Math.max(a, 160);
+            }
+          } else {
+            if (a === 0) {
+              r = 225; g = 29; b = 72; a = 145;
+            } else {
+              r = (r * 0.5 + 225 * 0.5) | 0;
+              g = (g * 0.5 + 29 * 0.5) | 0;
+              b = (b * 0.5 + 72 * 0.5) | 0;
+              a = Math.max(a, 175);
+            }
+          }
+        }
+
+        // 5. Illumination Layer
+        if (layers?.showIllumination) {
+          if (isLit) {
+            if (a === 0) {
+              r = 251; g = 191; b = 36; a = 120;
+            } else {
+              r = Math.min(255, (r * 0.65 + 251 * 0.35) | 0);
+              g = Math.min(255, (g * 0.65 + 191 * 0.35) | 0);
+              b = (b * 0.65 + 36 * 0.35) | 0;
+            }
+          } else {
+            if (a === 0) {
+              r = 3; g = 7; b = 18; a = 180;
+            } else {
+              r = (r * 0.3) | 0;
+              g = (g * 0.3) | 0;
+              b = (b * 0.4 + 15) | 0;
+              a = Math.max(a, 190);
+            }
+          }
+        }
+
+        // 6. Permanent Shadow Region (PSR) Cold Trap
+        if (layers?.showPSR && isPSR) {
+          r = 99; g = 102; b = 241; a = 225;
+        }
+
+        // 7. Hazard Overlays
+        const isTerrainHazard = slope > maxSlopeLimit;
+        if (layers?.showFusedHazard && (isTerrainHazard || isMLHazard)) {
+          r = 245; g = 158; b = 11; a = 230;
+        } else if (layers?.showHazard && isTerrainHazard) {
+          r = 239; g = 68; b = 68; a = 230;
+        } else if (layers?.showMLHazard && isMLHazard) {
+          r = 217; g = 70; b = 239; a = 220;
+        }
+
+        const idx = (py * sw + px) * 4;
+        sData[idx] = r;
+        sData[idx + 1] = g;
+        sData[idx + 2] = b;
+        sData[idx + 3] = a;
+      }
+    }
+
+    sCtx.putImageData(sImgData, 0, 0);
+
+    // Scale up onto the main layer texture canvas
+    layerCtx.clearRect(0, 0, width, height);
+    layerCtx.drawImage(sCanvas, 0, 0, width, height);
+
+    // Vector annotations for ML detected craters
+    if (layers?.showMLHazard || layers?.showFusedHazard) {
+      SIMULATED_ML_CRATERS.forEach((c) => {
+        const { lat, lon } = polarStereoToLatLon(c.x, c.y);
+        const cx = ((lon / 360.0) + 0.5) * width;
+        const cy = (0.5 - (lat / 180.0)) * height;
+        layerCtx.save();
+        layerCtx.strokeStyle = "#f0abfc";
+        layerCtx.lineWidth = 2;
+        layerCtx.beginPath();
+        layerCtx.arc(cx, cy, 12, 0, Math.PI * 2);
+        layerCtx.stroke();
+        layerCtx.fillStyle = "rgba(15, 23, 42, 0.85)";
+        layerCtx.fillRect(cx - 24, cy - 20, 48, 12);
+        layerCtx.fillStyle = "#f5d0fe";
+        layerCtx.font = "bold 8px 'JetBrains Mono', monospace";
+        layerCtx.fillText(`ML ${(c.conf * 100).toFixed(0)}%`, cx - 18, cy - 11);
+        layerCtx.restore();
+      });
+    }
+
+    layerTexture.needsUpdate = true;
+  }, [layers, currentStep]);
 
   // Toggle Landmarks Visibility
   useEffect(() => {
@@ -907,6 +1374,19 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
     setCameraDistance(2.4);
   };
 
+  const hasActiveLayers = Boolean(
+    layers &&
+      (layers.showSlope ||
+        layers.showRoughness ||
+        layers.showHazard ||
+        layers.showPSR ||
+        layers.showEarthVisibility ||
+        layers.showMLHazard ||
+        layers.showFusedHazard ||
+        layers.showIllumination ||
+        layers.showAspect)
+  );
+
   return (
     <div className="flex flex-col gap-3 w-full" style={{ width: "100%" }}>
       {/* 3D Viewport Container */}
@@ -926,7 +1406,7 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
         />
 
         {/* Top-Left: Telemetry & Orientation HUD */}
-        <div className="absolute top-4 left-4 glass-panel px-3.5 py-2.5 flex flex-col gap-1.5 text-[11px] font-mono pointer-events-none select-none">
+        <div className="absolute top-4 left-4 glass-panel px-3.5 py-2.5 flex flex-col gap-1.5 text-[11px] font-mono pointer-events-none select-none z-10 max-w-sm">
           <div className="flex items-center gap-2 text-sky-300 font-bold">
             <Moon className="w-4 h-4 text-sky-400" />
             <span>3D LUNAR GLOBE: HIGH-RESOLUTION VISUALIZER</span>
@@ -942,6 +1422,67 @@ export const Moon3DView: React.FC<Moon3DViewProps> = ({ step, onToggle2D, onInsp
             <span>•</span>
             <span className="text-amber-300">SIM STEP {currentStep + 1}/48</span>
           </div>
+
+          {/* Active 3D GIS Layers Badges */}
+          {hasActiveLayers && (
+            <div className="mt-1 pt-1.5 border-t border-white/10 flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 text-[10px] text-cyan-300 font-semibold uppercase">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+                <span>Active 3D GIS Layers</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {layers?.showFusedHazard && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/25 border border-amber-500/50 text-amber-200 text-[9px] font-bold">
+                    FUSED HAZARD (FR-13)
+                  </span>
+                )}
+                {layers?.showMLHazard && (
+                  <span className="px-1.5 py-0.5 rounded bg-fuchsia-500/25 border border-fuchsia-500/50 text-fuchsia-200 text-[9px]">
+                    ML CRATERS ({Math.round((layers.mlConfidenceThreshold ?? 0.6) * 100)}%)
+                  </span>
+                )}
+                {layers?.showHazard && (
+                  <span className="px-1.5 py-0.5 rounded bg-rose-500/25 border border-rose-500/50 text-rose-200 text-[9px]">
+                    SLOPE &gt;{layers.maxSlopeLimit}°
+                  </span>
+                )}
+                {layers?.showSlope && (
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-200 text-[9px]">
+                    <span>SLOPE ({layers.colormap?.toUpperCase() ?? "VIRIDIS"})</span>
+                    <div
+                      className={`w-8 h-1 rounded-sm ml-0.5 ${
+                        layers.colormap === "magma"
+                          ? "bg-gradient-to-r from-black via-purple-600 via-rose-500 to-amber-300"
+                          : layers.colormap === "terrain"
+                          ? "bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-600"
+                          : "bg-gradient-to-r from-indigo-700 via-emerald-500 to-yellow-300"
+                      }`}
+                    />
+                  </div>
+                )}
+                {layers?.showRoughness && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[9px]">
+                    ROUGHNESS (TRI)
+                  </span>
+                )}
+                {layers?.showPSR && (
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/25 border border-indigo-500/50 text-indigo-200 text-[9px]">
+                    ❄ PSR COLD TRAPS
+                  </span>
+                )}
+                {layers?.showEarthVisibility && (
+                  <span className="px-1.5 py-0.5 rounded bg-sky-500/25 border border-sky-500/50 text-sky-200 text-[9px]">
+                    EARTH LINE-OF-SIGHT
+                  </span>
+                )}
+                {layers?.showIllumination && (
+                  <span className="px-1.5 py-0.5 rounded bg-yellow-500/25 border border-yellow-500/50 text-yellow-200 text-[9px]">
+                    SOLAR ILLUMINATION
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Top-Right: Camera Presets & Control Dock */}

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { Banner } from "../../src/components/Banner";
 import { Navbar } from "../../src/components/Navbar";
-import { LayerControl } from "../../src/features/map/LayerControl";
+import { LayerControl, LayerState } from "../../src/features/map/LayerControl";
 import { InspectorPanel } from "../../src/features/map/InspectorPanel";
 import { TimelineScrubber } from "../../src/features/map/TimelineScrubber";
 import { Moon3DView } from "../../src/features/map/Moon3DView";
@@ -188,5 +188,35 @@ describe("Web UI Components", () => {
     expect(screen.getByText(/South Pole \(AOI\)/i)).toBeInTheDocument();
     expect(screen.getByText(/Earth-Facing/i)).toBeInTheDocument();
     expect(screen.getByText(/Shackleton Crater/i)).toBeInTheDocument();
+  });
+
+  it("renders Moon3DView with active 3D GIS layers and colormap indicators", () => {
+    const layers: LayerState = {
+      showSlope: true,
+      showAspect: false,
+      showRoughness: true,
+      showHazard: true,
+      showHillshade: true,
+      showIllumination: true,
+      showPSR: true,
+      showEarthVisibility: true,
+      showMLHazard: true,
+      showFusedHazard: true,
+      mlConfidenceThreshold: 0.65,
+      colormap: "magma",
+      maxSlopeLimit: 18,
+    };
+
+    render(<Moon3DView layers={layers} />);
+
+    expect(screen.getByText(/Active 3D GIS Layers/i)).toBeInTheDocument();
+    expect(screen.getByText(/FUSED HAZARD \(FR-13\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/ML CRATERS \(65%\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/SLOPE >18°/i)).toBeInTheDocument();
+    expect(screen.getByText(/SLOPE \(MAGMA\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/ROUGHNESS \(TRI\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/❄ PSR COLD TRAPS/i)).toBeInTheDocument();
+    expect(screen.getByText(/EARTH LINE-OF-SIGHT/i)).toBeInTheDocument();
+    expect(screen.getByText(/SOLAR ILLUMINATION/i)).toBeInTheDocument();
   });
 });
