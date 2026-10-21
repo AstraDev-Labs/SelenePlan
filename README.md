@@ -83,6 +83,12 @@ python -m pytest libs services
 - **Final End-to-End Demo & Shot List:** [`docs/demos/final-demo.md`](file:///docs/demos/final-demo.md)
 - **Final Architectural & Threat Audit:** [`docs/final-review.md`](file:///docs/final-review.md)
 
+## Project governance
+- **License:** [`LICENSE`](LICENSE)
+- **Contributing Guide:** [`CONTRIBUTING.md`](CONTRIBUTING.md)
+- **Code of Conduct:** [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md)
+- **Security Policy:** [`SECURITY.md`](SECURITY.md)
+
 ## Kubernetes & Enterprise Deployment
 Production deployments utilize Helm packaging (`infra/helm/seleneplan`) with strict Pod Security Standards:
 ```bash
